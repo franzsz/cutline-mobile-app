@@ -1,0 +1,236 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Supremo Barber - Download App</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Arial', sans-serif;
+            background: linear-gradient(135deg, #2c1810 0%, #8b4513 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+        }
+
+        .container {
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+            border-radius: 20px;
+            padding: 40px;
+            text-align: center;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            max-width: 500px;
+            width: 90%;
+        }
+
+        .logo {
+            width: 80px;
+            height: 80px;
+            background: #d4af37;
+            border-radius: 50%;
+            margin: 0 auto 20px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 24px;
+            font-weight: bold;
+            color: #2c1810;
+        }
+
+        h1 {
+            font-size: 2.5em;
+            margin-bottom: 10px;
+            color: #d4af37;
+        }
+
+        .subtitle {
+            font-size: 1.2em;
+            margin-bottom: 30px;
+            opacity: 0.9;
+        }
+
+        .download-section {
+            margin: 30px 0;
+        }
+
+        .download-btn {
+            display: inline-block;
+            background: linear-gradient(45deg, #d4af37, #f4d03f);
+            color: #2c1810;
+            text-decoration: none;
+            padding: 15px 30px;
+            border-radius: 50px;
+            font-weight: bold;
+            font-size: 1.1em;
+            margin: 10px;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 15px rgba(212, 175, 55, 0.3);
+        }
+
+        .download-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(212, 175, 55, 0.4);
+        }
+
+        .download-btn.cashier {
+            background: linear-gradient(45deg, #e74c3c, #c0392b);
+            color: white;
+            box-shadow: 0 4px 15px rgba(231, 76, 60, 0.3);
+        }
+
+        .download-btn.cashier:hover {
+            box-shadow: 0 6px 20px rgba(231, 76, 60, 0.4);
+        }
+
+        .app-info {
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 10px;
+            padding: 20px;
+            margin: 20px 0;
+            text-align: left;
+        }
+
+        .app-info h3 {
+            color: #d4af37;
+            margin-bottom: 10px;
+        }
+
+        .features {
+            list-style: none;
+            padding: 0;
+        }
+
+        .features li {
+            padding: 5px 0;
+            position: relative;
+            padding-left: 20px;
+        }
+
+        .features li:before {
+            content: "✓";
+            position: absolute;
+            left: 0;
+            color: #d4af37;
+            font-weight: bold;
+        }
+
+        .warning {
+            background: rgba(231, 76, 60, 0.2);
+            border: 1px solid rgba(231, 76, 60, 0.5);
+            border-radius: 10px;
+            padding: 15px;
+            margin: 20px 0;
+            font-size: 0.9em;
+        }
+
+        .warning strong {
+            color: #e74c3c;
+        }
+
+        .back-btn {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            background: rgba(255, 255, 255, 0.2);
+            color: white;
+            text-decoration: none;
+            padding: 10px 20px;
+            border-radius: 25px;
+            transition: all 0.3s ease;
+        }
+
+        .back-btn:hover {
+            background: rgba(255, 255, 255, 0.3);
+        }
+
+        @media (max-width: 600px) {
+            .container {
+                padding: 20px;
+                margin: 20px;
+            }
+            
+            h1 {
+                font-size: 2em;
+            }
+            
+            .download-btn {
+                display: block;
+                margin: 10px 0;
+            }
+        }
+    </style>
+</head>
+<body>
+    <a href="/home" class="back-btn">← Back to Home</a>
+    
+    <div class="container">
+        <div class="logo">SB</div>
+        <h1>Supremo Barber</h1>
+        <p class="subtitle">Download our mobile app for the best barber experience</p>
+        
+        <div class="download-section">
+            <a href="/downloads/app-customer-release.apk" class="download-btn" download>
+                📱 Download Customer App
+            </a>
+            <a href="/downloads/app-cashier-release.apk" class="download-btn cashier" download>
+                💼 Download Cashier App
+            </a>
+        </div>
+
+        <div class="app-info">
+            <h3>Customer App Features:</h3>
+            <ul class="features">
+                <li>Find nearby Supremo Barber branches</li>
+                <li>Join virtual queue remotely</li>
+                <li>Real-time queue position tracking</li>
+                <li>Location-based proximity alerts</li>
+                <li>View service history</li>
+                <li>Easy booking and management</li>
+            </ul>
+        </div>
+
+        <div class="app-info">
+            <h3>Cashier App Features:</h3>
+            <ul class="features">
+                <li>Manage customer queue</li>
+                <li>Assign barber seats</li>
+                <li>Process payments</li>
+                <li>Track service completion</li>
+                <li>Real-time queue monitoring</li>
+                <li>Customer search and filtering</li>
+            </ul>
+        </div>
+
+        <div class="warning">
+            <strong>⚠️ Installation Note:</strong><br>
+            Since this is not from Google Play Store, you may need to enable "Install from Unknown Sources" in your Android settings. Go to Settings > Security > Unknown Sources and enable it for your browser or file manager.
+        </div>
+    </div>
+
+    <script>
+        // Add click tracking for analytics
+        document.querySelectorAll('.download-btn').forEach(btn => {
+            btn.addEventListener('click', function(e) {
+                const appType = this.classList.contains('cashier') ? 'cashier' : 'customer';
+                console.log(`Download started: ${appType} app`);
+                
+                // You can add analytics tracking here
+                // gtag('event', 'download', {
+                //     'app_type': appType,
+                //     'event_category': 'app_download'
+                // });
+            });
+        });
+    </script>
+</body>
+</html>

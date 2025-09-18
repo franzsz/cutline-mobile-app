@@ -1,0 +1,81 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function currentUserDoc() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid));
+    }
+
+    function isStaff() {
+      return isSignedIn() &&
+        (currentUserDoc().data.role == 'admin' || currentUserDoc().data.role == 'cashier');
+    }
+
+    // Allow users to read and write their own ratings
+    match /ratings/{ratingId} {
+      allow read: if isSignedIn();
+      allow create: if isSignedIn();
+      allow update, delete: if isSignedIn() && 
+        (request.auth.uid == resource.data.customerId || 
+         request.auth.uid == resource.data.uid);
+    }
+    
+    // Allow users to read and write their own queue entries
+    match /queue/{queueId} {
+      allow read: if isSignedIn();
+      allow create: if isSignedIn();
+      allow update, delete: if isSignedIn() && (
+        // Owner of the queue (customer or assigned barber)
+        request.auth.uid == resource.data.customerId ||
+        request.auth.uid == resource.data.uid ||
+        request.auth.uid == resource.data.barberId ||
+        // Cashier/Admin can manage queues
+        isStaff()
+      );
+    }
+    
+    // Allow users to read and write their own transactions
+    match /transactions/{transactionId} {
+      allow read: if isSignedIn() && 
+        (request.auth.uid == resource.data.uid || 
+         request.auth.uid == resource.data.customerId ||
+         request.auth.uid == resource.data.barberId ||
+         isStaff());
+      allow create: if isSignedIn() && 
+        (request.auth.uid == request.resource.data.uid || 
+         request.auth.uid == request.resource.data.customerId ||
+         isStaff());
+      allow update, delete: if isSignedIn() && 
+        (request.auth.uid == resource.data.uid || 
+         request.auth.uid == resource.data.customerId ||
+         request.auth.uid == resource.data.barberId ||
+         isStaff());
+    }
+    
+    // Allow users to read branch information
+    match /branches/{branchId} {
+      allow read: if isSignedIn();
+    }
+    
+    // Allow users to read haircut information
+    match /haircuts/{haircutId} {
+      allow read: if isSignedIn();
+    }
+    
+    // Allow users to read and write their own user profiles
+    match /users/{userId} {
+      // Users can always read their own profile; staff can read everyone
+      allow read: if isSignedIn() && (request.auth.uid == userId || isStaff());
+      // Users can write their own profile; restrict others unless staff
+      allow write: if isSignedIn() && (request.auth.uid == userId);
+      
+      // Allow users to read and write their own logs subcollection
+      match /logs/{logId} {
+        allow read, write: if isSignedIn() && request.auth.uid == userId;
+      }
+    }
+  }
+}

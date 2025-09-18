@@ -1,0 +1,75 @@
+plugins {
+    id "com.android.application"
+    id "kotlin-android"
+    id "dev.flutter.flutter-gradle-plugin"
+    id "com.google.gms.google-services" // ✅ Firebase plugin added here
+}
+
+def localProperties = new Properties()
+def localPropertiesFile = rootProject.file('local.properties')
+if (localPropertiesFile.exists()) {
+    localPropertiesFile.withReader('UTF-8') { reader ->
+        localProperties.load(reader)
+    }
+}
+
+def flutterVersionCode = localProperties.getProperty('flutter.versionCode') ?: '1'
+def flutterVersionName = localProperties.getProperty('flutter.versionName') ?: '1.0'
+
+android {
+    namespace "com.example.shop"
+    compileSdk = 35
+    ndkVersion = flutter.ndkVersion
+
+    defaultConfig {
+        applicationId "com.example.shop"
+        minSdk = 21
+        targetSdk = 35
+        versionCode = flutterVersionCode.toInteger()
+        versionName = flutterVersionName
+    }
+
+    flavorDimensions "app"
+    productFlavors {
+        customer {
+            dimension "app"
+            applicationId "com.example.shop"
+            resValue "string", "app_name", "Supremo Barbers"
+        }
+        cashier {
+            dimension "app"
+            applicationId "com.example.shop.cashier"
+            resValue "string", "app_name", "Supremo Barbers (Cashier)"
+        }
+    }
+
+    compileOptions {
+        sourceCompatibility = JavaVersion.VERSION_17
+        targetCompatibility = JavaVersion.VERSION_17
+        coreLibraryDesugaringEnabled true // ✅ ADD THIS LINE
+    }
+
+    kotlinOptions {
+        jvmTarget = "17"
+    }
+
+    sourceSets {
+        main.java.srcDirs += 'src/main/kotlin'
+    }
+
+    buildTypes {
+        release {
+            signingConfig signingConfigs.debug
+        }
+    }
+}
+
+flutter {
+    source '../..'
+}
+
+dependencies {
+    // Firebase and geolocation dependencies are in pubspec.yaml
+    // other dependencies...
+    coreLibraryDesugaring 'com.android.tools:desugar_jdk_libs:2.1.5' // ✅ latest stable
+}
