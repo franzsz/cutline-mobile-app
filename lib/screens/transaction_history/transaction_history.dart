@@ -81,7 +81,7 @@ class _TransactionHistoryPageState extends State<TransactionHistoryPage> {
                 Text('Queue #: ${transaction['queueNumber'] ?? 'N/A'}'),
                 Text(
                     'Payment Method: ${transaction['paymentMethod'] ?? 'N/A'}'),
-                Text('Amount: ₱${transaction['amount'] ?? 0}'),
+                Text('Amount: ₱${transaction['paymentAmount'] ?? 0}'),
                 Text('Status: ${transaction['status'] ?? 'Pending'}'),
                 Text(
                     'Date: ${DateFormat.yMMMd().add_jm().format(transaction['createdAt'].toDate())}'),
@@ -143,7 +143,7 @@ class _TransactionHistoryPageState extends State<TransactionHistoryPage> {
               return Card(
                 margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                 child: ListTile(
-                  title: Text("₱${data['amount']}"),
+                  title: Text("₱${data['paymentAmount']}"),
                   subtitle: Text(
                       "Barber: ${data['barberName'] ?? 'N/A'}\nPaid via ${data['paymentMethod'] ?? 'N/A'}"),
                   trailing: Column(
