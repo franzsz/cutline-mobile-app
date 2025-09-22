@@ -3,7 +3,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:shop/entry_point.dart';
 import 'package:shop/entry_point2.dart';
-import 'package:shop/screens/onbording/views/onbording_screnn.dart';
+import 'package:shop/route/route_constants.dart';
 
 class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key});
@@ -25,10 +25,7 @@ class _SplashScreenState extends State<SplashScreen> {
     final user = FirebaseAuth.instance.currentUser;
 
     if (user == null) {
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(builder: (_) => const OnBordingScreen()),
-      );
+      Navigator.pushReplacementNamed(context, logInScreenRoute);
       return;
     }
 
@@ -52,10 +49,7 @@ class _SplashScreenState extends State<SplashScreen> {
         );
       }
     } catch (e) {
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(builder: (_) => const OnBordingScreen()),
-      );
+      Navigator.pushReplacementNamed(context, logInScreenRoute);
     }
   }
 

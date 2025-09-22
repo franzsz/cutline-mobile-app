@@ -15,8 +15,6 @@ class _LoginScreenState extends State<LoginEmployeeScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final Size size = MediaQuery.of(context).size;
-
     return Scaffold(
       body: Center(
         child: SingleChildScrollView(
@@ -43,7 +41,7 @@ class _LoginScreenState extends State<LoginEmployeeScreen> {
                   crossAxisAlignment: CrossAxisAlignment.center,
                   children: [
                     Text(
-                      "Welcome, Barber!",
+                      "Welcome, Cashier!",
                       style: Theme.of(context).textTheme.headlineSmall,
                       textAlign: TextAlign.center,
                     ),

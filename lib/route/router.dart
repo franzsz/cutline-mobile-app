@@ -8,8 +8,9 @@ import 'screen_export.dart';
 Route<dynamic> generateRoute(RouteSettings settings) {
   switch (settings.name) {
     case onbordingScreenRoute:
+      // Hide onboarding: route to SplashScreen instead
       return MaterialPageRoute(
-        builder: (_) => const OnBordingScreen(),
+        builder: (_) => const SplashScreen(),
       );
     case splashScreenRoute:
       return MaterialPageRoute(
@@ -19,8 +20,9 @@ Route<dynamic> generateRoute(RouteSettings settings) {
     case LoginEmployeeScreenRoute:
       if (kAppRole.toLowerCase() != 'cashier' &&
           kAppRole.toLowerCase() != 'barber') {
+        // Hide onboarding: show SplashScreen fallback
         return MaterialPageRoute(
-          builder: (context) => const OnBordingScreen(),
+          builder: (context) => const SplashScreen(),
         );
       }
       return MaterialPageRoute(
@@ -209,8 +211,8 @@ Route<dynamic> generateRoute(RouteSettings settings) {
 
     default:
       return MaterialPageRoute(
-        // Make a screen for undefine
-        builder: (context) => const OnBordingScreen(),
+        // Fallback: hide onboarding, go to SplashScreen
+        builder: (context) => const SplashScreen(),
       );
   }
 }
