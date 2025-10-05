@@ -22,15 +22,6 @@ class _LoginScreenState extends State<LoginEmployeeScreen> {
             mainAxisAlignment: MainAxisAlignment.center,
             crossAxisAlignment: CrossAxisAlignment.center,
             children: [
-              Align(
-                alignment: Alignment.centerLeft,
-                child: IconButton(
-                  icon: const Icon(Icons.arrow_back),
-                  onPressed: () {
-                    Navigator.pushNamed(context, onbordingScreenRoute);
-                  },
-                ),
-              ),
               Image.asset(
                 "assets/images/logo.jpg",
                 fit: BoxFit.cover,
@@ -55,6 +46,20 @@ class _LoginScreenState extends State<LoginEmployeeScreen> {
                               context, passwordRecoveryScreenRoute);
                         },
                       ),
+                    ),
+                    const SizedBox(height: defaultPadding),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        const Text("Don't have an account?"),
+                        TextButton(
+                          onPressed: () {
+                            Navigator.pushNamed(
+                                context, signUpEmployeeScreenRoute);
+                          },
+                          child: const Text("Sign up"),
+                        )
+                      ],
                     ),
                   ],
                 ),

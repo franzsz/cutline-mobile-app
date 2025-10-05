@@ -70,18 +70,6 @@ class _EntryPointState extends State<EntryPoint> {
           fit: BoxFit.contain,
         ),
         actions: [
-          IconButton(
-            onPressed: () {
-              Navigator.pushNamed(context, searchScreenRoute);
-            },
-            icon: svgIcon("assets/icons/Search.svg"),
-          ),
-          IconButton(
-            onPressed: () {
-              Navigator.pushNamed(context, notificationsScreenRoute);
-            },
-            icon: svgIcon("assets/icons/Notification.svg"),
-          ),
           const CompactThemeToggle(),
         ],
       ),

@@ -1,6 +1,9 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'dart:async';
+import 'dart:math' as math;
+import 'package:shop/route/route_constants.dart';
 
 class CashierQueueScreen extends StatefulWidget {
   final String branchId;
@@ -16,6 +19,8 @@ class _CashierQueueScreenState extends State<CashierQueueScreen> {
   final Set<String> _statusFilters = {'pending', 'in_service'};
   final Map<String, String> _uidToNameCache = {};
   Timer? _searchDebounce;
+  double? _branchLat;
+  double? _branchLng;
 
   int? _parseSeatFromNote(String? note) {
     if (note == null) return null;
@@ -94,6 +99,7 @@ class _CashierQueueScreenState extends State<CashierQueueScreen> {
     super.initState();
     // ignore: avoid_print
     print('[CashierQueue] listening for branchId=${widget.branchId}');
+    _loadBranchLocation();
   }
 
   Stream<QuerySnapshot<Map<String, dynamic>>> _queueStream() {
@@ -103,6 +109,55 @@ class _CashierQueueScreenState extends State<CashierQueueScreen> {
         .where('status', whereIn: ['pending', 'in_service'])
         .orderBy('createdAt')
         .snapshots();
+  }
+
+  Future<void> _loadBranchLocation() async {
+    try {
+      final doc = await _db.collection('branches').doc(widget.branchId).get();
+      final data = doc.data();
+      if (data == null) return;
+      final coords = data['coordinates'];
+      double? lat;
+      double? lng;
+      if (coords != null) {
+        try {
+          lat = (coords.latitude as num?)?.toDouble();
+          lng = (coords.longitude as num?)?.toDouble();
+        } catch (_) {
+          final m = coords as Map<String, dynamic>;
+          lat = (m['latitude'] as num?)?.toDouble();
+          lng = (m['longitude'] as num?)?.toDouble();
+          if (lat == null && m['latitude'] is String) {
+            lat = double.tryParse((m['latitude'] as String)
+                .replaceAll(',', '.')
+                .replaceAll(RegExp(r'[^0-9.\-]'), ''));
+          }
+          if (lng == null && m['longitude'] is String) {
+            lng = double.tryParse((m['longitude'] as String)
+                .replaceAll(',', '.')
+                .replaceAll(RegExp(r'[^0-9.\-]'), ''));
+          }
+        }
+      }
+      if (!mounted) return;
+      setState(() {
+        _branchLat = lat;
+        _branchLng = lng;
+      });
+    } catch (_) {}
+  }
+
+  double _haversineMeters(double lat1, double lon1, double lat2, double lon2) {
+    const double R = 6371000; // meters
+    final double dLat = (lat2 - lat1) * math.pi / 180.0;
+    final double dLon = (lon2 - lon1) * math.pi / 180.0;
+    final double a = math.sin(dLat / 2) * math.sin(dLat / 2) +
+        math.cos(lat1 * math.pi / 180.0) *
+            math.cos(lat2 * math.pi / 180.0) *
+            math.sin(dLon / 2) *
+            math.sin(dLon / 2);
+    final double c = 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a));
+    return R * c;
   }
 
   // Barber list is not used in this simplified seat assignment flow
@@ -273,14 +328,26 @@ class _CashierQueueScreenState extends State<CashierQueueScreen> {
     final queueData = queueDoc.data()!;
 
     // Create transaction record with queue data and payment amount
+    final String? cashierUid = FirebaseAuth.instance.currentUser?.uid;
+    final String? customerUid =
+        (queueData['uid'] as String?)?.isNotEmpty == true
+            ? queueData['uid'] as String
+            : (queueData['customerId'] as String?);
     final transactionData = {
       ...queueData,
-      'status': 'completed',
+      // Normalize to capitalized to align with history filters
+      'status': 'Completed',
       'completedAt': FieldValue.serverTimestamp(),
       'transactionId': queueId, // Keep original queue ID as transaction ID
       'createdAt': queueData['createdAt'] ?? FieldValue.serverTimestamp(),
       'paymentAmount': paymentAmount,
       'paymentMethod': paymentMethod,
+      // Fields required by Firestore rules and history queries
+      // `uid` should be the customer for customer transaction history
+      'uid': customerUid,
+      'cashierId': cashierUid,
+      'customerId': customerUid,
+      'barberId': queueData['barberId'] ?? queueData['requestedBarberId'],
     };
 
     // Add to transactions collection
@@ -472,8 +539,9 @@ class _CashierQueueScreenState extends State<CashierQueueScreen> {
         centerTitle: true,
         actions: [
           IconButton(
-            icon: const Icon(Icons.refresh),
-            onPressed: () => setState(() {}),
+            tooltip: 'Log out',
+            icon: const Icon(Icons.logout),
+            onPressed: _logout,
           ),
         ],
       ),
@@ -582,35 +650,73 @@ class _CashierQueueScreenState extends State<CashierQueueScreen> {
                   );
                 }
 
-                // Sort priority first, then by etaMeters (location-based), then by createdAt
-                docs.sort((a, b) {
-                  final pa = (a.data()['priority'] == true) ? 0 : 1;
-                  final pb = (b.data()['priority'] == true) ? 0 : 1;
-                  if (pa != pb) return pa.compareTo(pb);
+                // Align sorting with customer screen: locked first, then lockIndex/lockTime,
+                // then by distance (etaMeters/drivingKm) and finally createdAt.
+                int compareEntries(
+                    QueryDocumentSnapshot<Map<String, dynamic>> a,
+                    QueryDocumentSnapshot<Map<String, dynamic>> b) {
+                  final da = a.data();
+                  final db = b.data();
 
-                  // If both have etaMeters, sort by distance (closer first)
-                  final etaA = a.data()['etaMeters'];
-                  final etaB = b.data()['etaMeters'];
-                  if (etaA != null && etaB != null) {
-                    final distA = etaA is num
-                        ? etaA.toDouble()
-                        : (etaA is String ? double.tryParse(etaA) : null);
-                    final distB = etaB is num
-                        ? etaB.toDouble()
-                        : (etaB is String ? double.tryParse(etaB) : null);
-                    if (distA != null && distB != null) {
-                      return distA.compareTo(distB);
+                  final bool aLocked =
+                      (da['proximityConfirmed'] as bool?) ?? false;
+                  final bool bLocked =
+                      (db['proximityConfirmed'] as bool?) ?? false;
+                  if (aLocked != bLocked) return aLocked ? -1 : 1;
+
+                  if (aLocked && bLocked) {
+                    final num aIdx =
+                        (da['lockIndex'] as num?) ?? double.maxFinite;
+                    final num bIdx =
+                        (db['lockIndex'] as num?) ?? double.maxFinite;
+                    if (aIdx != bIdx) return aIdx.compareTo(bIdx);
+
+                    final Timestamp? aT =
+                        da['proximityConfirmedAt'] as Timestamp?;
+                    final Timestamp? bT =
+                        db['proximityConfirmedAt'] as Timestamp?;
+                    if (aT != null && bT != null) return aT.compareTo(bT);
+                    if (aT != null) return -1;
+                    if (bT != null) return 1;
+                  }
+
+                  double distanceOf(Map<String, dynamic> d) {
+                    final eta = d['etaMeters'];
+                    final drivingKm = d['drivingKm'];
+                    if (eta is num) return eta.toDouble();
+                    if (eta is String) {
+                      final v = double.tryParse(eta);
+                      if (v != null) return v;
                     }
+                    if (drivingKm is num) return drivingKm.toDouble() * 1000.0;
+                    if (drivingKm is String) {
+                      final v = double.tryParse(drivingKm);
+                      if (v != null) return v * 1000.0;
+                    }
+                    final lat = (d['userLat'] as num?)?.toDouble();
+                    final lng = (d['userLng'] as num?)?.toDouble();
+                    if (lat != null &&
+                        lng != null &&
+                        _branchLat != null &&
+                        _branchLng != null) {
+                      return _haversineMeters(
+                          lat, lng, _branchLat!, _branchLng!);
+                    }
+                    return double.maxFinite;
                   }
 
-                  // Fallback to createdAt
-                  final ta = a.data()['createdAt'];
-                  final tb = b.data()['createdAt'];
-                  if (ta is Timestamp && tb is Timestamp) {
+                  final d1 = distanceOf(da);
+                  final d2 = distanceOf(db);
+                  if (d1 != d2) return d1.compareTo(d2);
+
+                  final ta = da['createdAt'];
+                  final tb = db['createdAt'];
+                  if (ta is Timestamp && tb is Timestamp)
                     return ta.compareTo(tb);
-                  }
                   return 0;
-                });
+                }
+
+                docs.sort(compareEntries);
 
                 // Build occupied seat set for the seat board (from in_service docs)
                 final Set<int> occupiedSeats = {
@@ -665,7 +771,13 @@ class _CashierQueueScreenState extends State<CashierQueueScreen> {
                       final String uid = data['uid'] ?? 'walk-in';
 
                       return FutureBuilder<String>(
-                        future: _getUserName(uid),
+                        future: uid == 'walk-in'
+                            ? Future.value(
+                                ((data['name'] as String?)?.trim().isNotEmpty ==
+                                        true)
+                                    ? (data['name'] as String)
+                                    : 'Walk-in')
+                            : _getUserName(uid),
                         builder: (context, snap) {
                           final name = snap.data ?? 'Customer';
                           return Card(
@@ -920,6 +1032,158 @@ class _CashierQueueScreenState extends State<CashierQueueScreen> {
           ),
         ],
       ),
+      floatingActionButton: FloatingActionButton.extended(
+        onPressed: _addWalkIn,
+        icon: const Icon(Icons.person_add),
+        label: const Text('Add Walk-in'),
+      ),
+    );
+  }
+
+  Future<void> _logout() async {
+    try {
+      final user = FirebaseAuth.instance.currentUser;
+      if (user != null) {
+        try {
+          await FirebaseFirestore.instance
+              .collection('users')
+              .doc(user.uid)
+              .collection('logs')
+              .add({
+            'type': 'logout',
+            'timestamp': Timestamp.now(),
+          });
+        } catch (_) {
+          // best-effort logging; ignore failures
+        }
+      }
+      await FirebaseAuth.instance.signOut();
+    } catch (_) {}
+
+    if (!mounted) return;
+    Navigator.pushNamedAndRemoveUntil(
+      context,
+      LoginEmployeeScreenRoute,
+      (route) => false,
+    );
+  }
+
+  Future<void> _addWalkIn() async {
+    final TextEditingController nameController = TextEditingController();
+    String? selectedService;
+
+    final data = await showDialog<Map<String, dynamic>>(
+      context: context,
+      builder: (context) {
+        return StatefulBuilder(builder: (context, setStateSB) {
+          return AlertDialog(
+            title: const Text('Add Walk-in Customer'),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                TextField(
+                  controller: nameController,
+                  decoration: const InputDecoration(
+                    labelText: 'Customer name (required)',
+                    border: OutlineInputBorder(),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                DropdownButtonFormField<String>(
+                  value: selectedService,
+                  decoration: const InputDecoration(
+                    labelText: 'Service (optional)',
+                    border: OutlineInputBorder(),
+                  ),
+                  items: const [
+                    DropdownMenuItem(value: 'Haircut', child: Text('Haircut')),
+                    DropdownMenuItem(value: 'Shave', child: Text('Shave')),
+                    DropdownMenuItem(
+                        value: 'Haircut + Shave',
+                        child: Text('Haircut + Shave')),
+                    DropdownMenuItem(value: 'Color', child: Text('Color')),
+                  ],
+                  onChanged: (v) => setStateSB(() => selectedService = v),
+                ),
+              ],
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text('Cancel'),
+              ),
+              ElevatedButton(
+                onPressed: () async {
+                  try {
+                    final name = nameController.text.trim();
+                    if (name.isEmpty) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                            content: Text('Please enter customer name')),
+                      );
+                      return;
+                    }
+                    // Compute next queue number for this branch (pending only)
+                    final qSnap = await _db
+                        .collection('queue')
+                        .where('branchId', isEqualTo: widget.branchId)
+                        .where('status', isEqualTo: 'pending')
+                        .get();
+                    int nextQueueNumber = 1;
+                    int nextLockIndex = 1;
+                    for (final d in qSnap.docs) {
+                      final v = d.data()['queueNumber'];
+                      if (v is int && v >= nextQueueNumber) {
+                        nextQueueNumber = v + 1;
+                      }
+                      final li = d.data()['lockIndex'];
+                      if (li is num && li.toInt() >= nextLockIndex) {
+                        nextLockIndex = li.toInt() + 1;
+                      }
+                    }
+
+                    final Map<String, dynamic> payload = {
+                      'branchId': widget.branchId,
+                      'status': 'pending',
+                      'uid': 'walk-in',
+                      'preferAnyBarber': true,
+                      'createdAt': FieldValue.serverTimestamp(),
+                      'queueNumber': nextQueueNumber,
+                      'proximityConfirmed': true,
+                      'proximityConfirmedAt': FieldValue.serverTimestamp(),
+                      'lockIndex': nextLockIndex,
+                    };
+                    payload['name'] = name;
+                    if (selectedService != null)
+                      payload['service'] = selectedService;
+
+                    await _db.collection('queue').add(payload);
+                    if (!mounted) return;
+                    Navigator.pop(context, {'ok': true});
+                  } catch (e) {
+                    if (!mounted) return;
+                    Navigator.pop(context, {'error': e.toString()});
+                  }
+                },
+                child: const Text('Add'),
+              ),
+            ],
+          );
+        });
+      },
+    );
+
+    if (data == null) return;
+    if (data['error'] != null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to add walk-in: ${data['error']}')),
+      );
+      return;
+    }
+
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Walk-in added to queue')),
     );
   }
 }

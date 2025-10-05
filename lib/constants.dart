@@ -29,20 +29,20 @@ const grandisExtendedFont = "Grandis Extended";
 
 // On color 80, 60.... those means opacity
 
-const Color primaryColor = Color(0xFF7B61FF);
+const Color primaryColor = Color(0xFF6B7280); // Gray 500
 
 const MaterialColor primaryMaterialColor =
-    MaterialColor(0xFF9581FF, <int, Color>{
-  50: Color(0xFFEFECFF),
-  100: Color(0xFFD7D0FF),
-  200: Color(0xFFBDB0FF),
-  300: Color(0xFFA390FF),
-  400: Color(0xFF8F79FF),
-  500: Color(0xFF7B61FF),
-  600: Color(0xFF7359FF),
-  700: Color(0xFF684FFF),
-  800: Color(0xFF5E45FF),
-  900: Color(0xFF6C56DD),
+    MaterialColor(0xFF6B7280, <int, Color>{
+  50: Color(0xFFF9FAFB),
+  100: Color(0xFFF3F4F6),
+  200: Color(0xFFE5E7EB),
+  300: Color(0xFFD1D5DB),
+  400: Color(0xFF9CA3AF),
+  500: Color(0xFF6B7280),
+  600: Color(0xFF4B5563),
+  700: Color(0xFF374151),
+  800: Color(0xFF1F2937),
+  900: Color(0xFF111827),
 });
 
 const Color blackColor = Color(0xFF16161E);

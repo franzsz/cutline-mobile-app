@@ -23,15 +23,6 @@ class _LoginScreenState extends State<LoginScreen> {
             mainAxisAlignment: MainAxisAlignment.center,
             crossAxisAlignment: CrossAxisAlignment.center,
             children: [
-              Align(
-                alignment: Alignment.centerLeft,
-                child: IconButton(
-                  icon: const Icon(Icons.arrow_back),
-                  onPressed: () {
-                    Navigator.pushNamed(context, onbordingScreenRoute);
-                  },
-                ),
-              ),
               Image.asset(
                 "assets/images/logo.jpg",
                 fit: BoxFit.cover,

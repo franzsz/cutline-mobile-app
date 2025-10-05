@@ -33,6 +33,14 @@ class BarberCard extends StatelessWidget {
                 width: 80,
                 height: 80,
                 fit: BoxFit.cover,
+                errorBuilder: (context, error, stackTrace) {
+                  return Container(
+                    width: 80,
+                    height: 80,
+                    color: Colors.grey.shade300,
+                    child: const Icon(Icons.person, color: Colors.white70),
+                  );
+                },
               ),
             ),
             const SizedBox(height: 8),

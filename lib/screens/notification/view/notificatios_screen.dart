@@ -9,18 +9,6 @@ class NotificationsScreen extends StatelessWidget {
     return Scaffold(
       appBar: AppBar(
         title: const Text("Notifications"),
-        actions: [
-          IconButton(
-            onPressed: () {},
-            icon: SvgPicture.asset(
-              "assets/icons/DotsV.svg",
-              colorFilter: ColorFilter.mode(
-                Theme.of(context).iconTheme.color!,
-                BlendMode.srcIn,
-              ),
-            ),
-          )
-        ],
       ),
     );
   }

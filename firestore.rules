@@ -55,9 +55,9 @@ service cloud.firestore {
          isStaff());
     }
     
-    // Allow users to read branch information
+    // Allow reading branch information (public)
     match /branches/{branchId} {
-      allow read: if isSignedIn();
+      allow read: if true;
     }
     
     // Allow users to read haircut information

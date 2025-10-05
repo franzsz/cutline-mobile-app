@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:shop/screens/auth/views/components/sign_up_form.dart';
+import 'package:shop/screens/auth/views/components/sign_up_cashier_form.dart';
 import 'package:shop/route/route_constants.dart';
 
 import '../../../constants.dart';
@@ -44,7 +44,7 @@ class _SignUpScreenState extends State<SignUpEmployeeScreen> {
                       textAlign: TextAlign.center,
                     ),
                     const SizedBox(height: defaultPadding),
-                    SignUpForm(formKey: _formKey),
+                    SignUpCashierForm(formKey: _formKey),
                     const SizedBox(height: defaultPadding * 2),
                     Row(
                       mainAxisAlignment: MainAxisAlignment.center,

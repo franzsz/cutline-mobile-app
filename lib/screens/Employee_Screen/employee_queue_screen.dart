@@ -96,46 +96,120 @@ class _QueueManagementPageState extends State<QueueManagementPage> {
 
   Future<void> _addWalkInCustomer(BuildContext context) async {
     final nameController = TextEditingController();
+    String? selectedService;
     final currentBarberId = FirebaseAuth.instance.currentUser?.uid;
 
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
-        title: const Text("Add Walk-in Customer"),
-        content: TextField(
-          controller: nameController,
-          decoration: const InputDecoration(
-            labelText: "Customer Name",
-            border: OutlineInputBorder(),
+      builder: (context) => StatefulBuilder(builder: (context, setStateSB) {
+        return AlertDialog(
+          title: const Text("Add Walk-in Customer"),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(
+                controller: nameController,
+                decoration: const InputDecoration(
+                  labelText: "Customer Name (required)",
+                  border: OutlineInputBorder(),
+                ),
+              ),
+              const SizedBox(height: 12),
+              DropdownButtonFormField<String>(
+                value: selectedService,
+                decoration: const InputDecoration(
+                  labelText: 'Service (optional)',
+                  border: OutlineInputBorder(),
+                ),
+                items: const [
+                  DropdownMenuItem(value: 'Haircut', child: Text('Haircut')),
+                  DropdownMenuItem(value: 'Shave', child: Text('Shave')),
+                  DropdownMenuItem(
+                      value: 'Haircut + Shave', child: Text('Haircut + Shave')),
+                  DropdownMenuItem(value: 'Color', child: Text('Color')),
+                ],
+                onChanged: (v) => setStateSB(() => selectedService = v),
+              ),
+            ],
           ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text("Cancel"),
-          ),
-          ElevatedButton(
-            onPressed: () async {
-              final name = nameController.text.trim();
-              if (name.isNotEmpty && currentBarberId != null) {
-                await FirebaseFirestore.instance.collection('queue').add({
-                  'barber': 'Walk-in',
-                  'barberId': currentBarberId,
-                  'status': 'pending',
-                  'createdAt': FieldValue.serverTimestamp(),
-                  'name': name,
-                  'uid': 'walk-in',
-                  'userLat': shopLat,
-                  'userLng': shopLng,
-                });
-                Navigator.pop(context);
-                setState(() {});
-              }
-            },
-            child: const Text("Add"),
-          ),
-        ],
-      ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text("Cancel"),
+            ),
+            ElevatedButton(
+              onPressed: () async {
+                final name = nameController.text.trim();
+                if (name.isEmpty) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Please enter customer name')),
+                  );
+                  return;
+                }
+                if (name.isNotEmpty && currentBarberId != null) {
+                  // Get current staff's branchId
+                  String? branchId;
+                  try {
+                    final userDoc = await FirebaseFirestore.instance
+                        .collection('users')
+                        .doc(currentBarberId)
+                        .get();
+                    branchId = userDoc.data()?['branchId'] as String?;
+                  } catch (_) {}
+
+                  // Compute next queue number and lockIndex for this branch (pending only)
+                  int nextQueueNumber = 1;
+                  int nextLockIndex = 1;
+                  if (branchId != null) {
+                    final qSnap = await FirebaseFirestore.instance
+                        .collection('queue')
+                        .where('branchId', isEqualTo: branchId)
+                        .where('status', isEqualTo: 'pending')
+                        .get();
+                    for (final d in qSnap.docs) {
+                      final v = d.data()['queueNumber'];
+                      if (v is int && v >= nextQueueNumber) {
+                        nextQueueNumber = v + 1;
+                      }
+                      final li = d.data()['lockIndex'];
+                      if (li is num && li.toInt() >= nextLockIndex) {
+                        nextLockIndex = li.toInt() + 1;
+                      }
+                    }
+                  }
+
+                  final Map<String, dynamic> payload = {
+                    'barber': 'Walk-in',
+                    'barberId': currentBarberId,
+                    'status': 'pending',
+                    'createdAt': FieldValue.serverTimestamp(),
+                    'name': name,
+                    'uid': 'walk-in',
+                    'userLat': shopLat,
+                    'userLng': shopLng,
+                    'queueNumber': nextQueueNumber,
+                    'preferAnyBarber': true,
+                    // Lock the position for walk-ins
+                    'proximityConfirmed': true,
+                    'proximityConfirmedAt': FieldValue.serverTimestamp(),
+                    'lockIndex': nextLockIndex,
+                  };
+                  if (branchId != null) payload['branchId'] = branchId;
+                  if (selectedService != null)
+                    payload['service'] = selectedService;
+
+                  await FirebaseFirestore.instance
+                      .collection('queue')
+                      .add(payload);
+                  Navigator.pop(context);
+                  setState(() {});
+                }
+              },
+              child: const Text("Add"),
+            ),
+          ],
+        );
+      }),
     );
   }
 

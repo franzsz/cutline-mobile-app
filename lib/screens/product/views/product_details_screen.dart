@@ -48,13 +48,6 @@ class ProductDetailsScreen extends StatelessWidget {
             SliverAppBar(
               backgroundColor: Theme.of(context).scaffoldBackgroundColor,
               floating: true,
-              actions: [
-                IconButton(
-                  onPressed: () {},
-                  icon: SvgPicture.asset("assets/icons/Bookmark.svg",
-                      color: Theme.of(context).textTheme.bodyLarge!.color),
-                ),
-              ],
             ),
             const ProductImages(
               images: [productDemoImg1, productDemoImg2, productDemoImg3],

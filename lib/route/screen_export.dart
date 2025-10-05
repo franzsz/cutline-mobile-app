@@ -39,3 +39,4 @@ export '/screens/discover/views/online_payment.dart';
 export '/screens/auth/views/components/login_form_barber.dart';
 export '/screens/splash/splash_screen.dart';
 export '/screens/auth/views/verify_code_screen.dart';
+export '/screens/auth/views/components/sign_up_cashier_form.dart';

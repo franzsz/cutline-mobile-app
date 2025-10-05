@@ -45,3 +45,53 @@ app.*.map.json
 # Exclude oversized files from repo
 readme image/FlutterShop_Intro.gif
 windows/flutter/ephemeral/flutter_windows.dll.pdb
+
+# Gradle cache files
+.gradle/
+.gradle/caches/
+.gradle/wrapper/
+
+# Android cache files
+.android/
+android/.cxx/
+android/app/.cxx/
+
+# IDE cache files
+.vscode/
+.cursor/
+
+# System files
+.DS_Store
+Thumbs.db
+
+# Temporary files
+*.tmp
+*.temp
+*.lock
+
+# Build files
+build/
+*.apk
+*.aab
+*.ipa
+
+# Firebase cache
+.firebase/
+firebase-debug.log
+firebase-debug.*.log
+
+# Node modules
+node_modules/
+
+# Logs
+*.log
+logs/
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
