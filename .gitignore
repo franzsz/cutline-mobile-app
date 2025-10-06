@@ -95,3 +95,10 @@ logs/
 .Trashes
 ehthumbs.db
 Thumbs.db
+.dart_tool/
+.gradle/
+android/.gradle/
+build/
+ios/Pods/
+**/build/
+**/.gradle/
