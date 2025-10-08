@@ -650,7 +650,7 @@ class _CashierQueueScreenState extends State<CashierQueueScreen> {
                   );
                 }
 
-                // Align sorting with customer screen: locked first, then lockIndex/lockTime,
+                // Align sorting with customer screen: locked first, then by lockedQueuePosition,
                 // then by distance (etaMeters/drivingKm) and finally createdAt.
                 int compareEntries(
                     QueryDocumentSnapshot<Map<String, dynamic>> a,
@@ -662,23 +662,17 @@ class _CashierQueueScreenState extends State<CashierQueueScreen> {
                       (da['proximityConfirmed'] as bool?) ?? false;
                   final bool bLocked =
                       (db['proximityConfirmed'] as bool?) ?? false;
-                  if (aLocked != bLocked) return aLocked ? -1 : 1;
 
+                  // Locked positions always come first and maintain their fixed position
                   if (aLocked && bLocked) {
-                    final num aIdx =
-                        (da['lockIndex'] as num?) ?? double.maxFinite;
-                    final num bIdx =
-                        (db['lockIndex'] as num?) ?? double.maxFinite;
-                    if (aIdx != bIdx) return aIdx.compareTo(bIdx);
-
-                    final Timestamp? aT =
-                        da['proximityConfirmedAt'] as Timestamp?;
-                    final Timestamp? bT =
-                        db['proximityConfirmedAt'] as Timestamp?;
-                    if (aT != null && bT != null) return aT.compareTo(bT);
-                    if (aT != null) return -1;
-                    if (bT != null) return 1;
+                    final num aLockedPos =
+                        (da['lockedQueuePosition'] as num?) ?? double.maxFinite;
+                    final num bLockedPos =
+                        (db['lockedQueuePosition'] as num?) ?? double.maxFinite;
+                    return aLockedPos.compareTo(bLockedPos);
                   }
+
+                  if (aLocked != bLocked) return aLocked ? -1 : 1;
 
                   double distanceOf(Map<String, dynamic> d) {
                     final eta = d['etaMeters'];
@@ -705,10 +699,8 @@ class _CashierQueueScreenState extends State<CashierQueueScreen> {
                     return double.maxFinite;
                   }
 
-                  final d1 = distanceOf(da);
-                  final d2 = distanceOf(db);
-                  if (d1 != d2) return d1.compareTo(d2);
-
+                  // For unlocked positions, sort by creation time (first come, first served)
+                  // This ensures unlocked positions don't jump ahead of each other
                   final ta = da['createdAt'];
                   final tb = db['createdAt'];
                   if (ta is Timestamp && tb is Timestamp)
@@ -1152,6 +1144,8 @@ class _CashierQueueScreenState extends State<CashierQueueScreen> {
                       'proximityConfirmed': true,
                       'proximityConfirmedAt': FieldValue.serverTimestamp(),
                       'lockIndex': nextLockIndex,
+                      'lockedQueuePosition':
+                          nextLockIndex, // Store the fixed queue position
                     };
                     payload['name'] = name;
                     if (selectedService != null)

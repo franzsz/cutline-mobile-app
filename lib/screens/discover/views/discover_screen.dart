@@ -51,7 +51,7 @@ class _DiscoverScreenState extends State<DiscoverScreen> {
     _initializeQueueing();
   }
 
-  // Loading dialog methods
+  // Enhanced loading dialog methods
   void _showRecommendationLoadingDialog() {
     showDialog(
       context: context,
@@ -60,70 +60,119 @@ class _DiscoverScreenState extends State<DiscoverScreen> {
         return WillPopScope(
           onWillPop: () async => false, // Prevent closing with back button
           child: Dialog(
-            backgroundColor: Colors.white,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(20),
-            ),
-            child: Padding(
-              padding: const EdgeInsets.all(24.0),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  // Loading animation
-                  Container(
-                    width: 80,
-                    height: 80,
-                    decoration: BoxDecoration(
-                      color: const Color(0xFFD4AF37),
-                      shape: BoxShape.circle,
-                    ),
-                    child: const Center(
-                      child: SizedBox(
-                        width: 40,
-                        height: 40,
-                        child: CircularProgressIndicator(
-                          strokeWidth: 4,
-                          valueColor:
-                              AlwaysStoppedAnimation<Color>(Colors.white),
+            backgroundColor: Colors.transparent,
+            elevation: 0,
+            child: Container(
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(24),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.1),
+                    blurRadius: 20,
+                    offset: const Offset(0, 10),
+                  ),
+                ],
+              ),
+              child: Padding(
+                padding: const EdgeInsets.all(32.0),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    // Enhanced loading animation with gradient
+                    Container(
+                      width: 100,
+                      height: 100,
+                      decoration: BoxDecoration(
+                        gradient: const LinearGradient(
+                          begin: Alignment.topLeft,
+                          end: Alignment.bottomRight,
+                          colors: [
+                            Color(0xFFD4AF37),
+                            Color(0xFFB8941F),
+                          ],
+                        ),
+                        shape: BoxShape.circle,
+                        boxShadow: [
+                          BoxShadow(
+                            color: const Color(0xFFD4AF37).withOpacity(0.3),
+                            blurRadius: 20,
+                            offset: const Offset(0, 8),
+                          ),
+                        ],
+                      ),
+                      child: const Center(
+                        child: SizedBox(
+                          width: 50,
+                          height: 50,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 4,
+                            valueColor:
+                                AlwaysStoppedAnimation<Color>(Colors.white),
+                          ),
                         ),
                       ),
                     ),
-                  ),
-                  const SizedBox(height: 24),
+                    const SizedBox(height: 32),
 
-                  // Title
-                  const Text(
-                    'Finding Best Options',
-                    style: TextStyle(
-                      fontSize: 20,
-                      fontWeight: FontWeight.bold,
-                      color: Color(0xFF1A0F0A),
+                    // Enhanced title with icon
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.all(8),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFD4AF37).withOpacity(0.1),
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: const Icon(
+                            Icons.explore,
+                            color: Color(0xFFD4AF37),
+                            size: 20,
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Flexible(
+                          child: Text(
+                            'Finding Best Options',
+                            style: const TextStyle(
+                              fontSize: 22,
+                              fontWeight: FontWeight.bold,
+                              color: Color(0xFF1A0F0A),
+                            ),
+                            textAlign: TextAlign.center,
+                          ),
+                        ),
+                      ],
                     ),
-                  ),
-                  const SizedBox(height: 16),
+                    const SizedBox(height: 16),
 
-                  // Description
-                  const Text(
-                    'Recommending nearest branch and service type based on your location...',
-                    textAlign: TextAlign.center,
-                    style: TextStyle(
-                      fontSize: 16,
-                      color: Colors.grey,
-                      height: 1.4,
+                    // Enhanced description
+                    const Text(
+                      'Analyzing your location and preferences to recommend the perfect barbershop experience',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        fontSize: 16,
+                        color: Colors.grey,
+                        height: 1.5,
+                      ),
                     ),
-                  ),
-                  const SizedBox(height: 8),
+                    const SizedBox(height: 12),
 
-                  // Subtitle
-                  const Text(
-                    'Please wait while we analyze your location and preferences',
-                    textAlign: TextAlign.center,
-                    style: TextStyle(
-                      fontSize: 14,
-                      color: Colors.grey,
+                    // Progress indicators
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        _LoadingDot(delay: 0),
+                        const SizedBox(width: 8),
+                        _LoadingDot(delay: 200),
+                        const SizedBox(width: 8),
+                        _LoadingDot(delay: 400),
+                      ],
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
             ),
           ),
@@ -509,20 +558,6 @@ class _DiscoverScreenState extends State<DiscoverScreen> {
     }
   }
 
-  Future<void> _cancelActiveQueueIfAny() async {
-    final uid = FirebaseAuth.instance.currentUser?.uid;
-    if (uid == null) return;
-    final existing = await FirebaseFirestore.instance
-        .collection('queue')
-        .where('uid', isEqualTo: uid)
-        .where('status', isEqualTo: 'pending')
-        .get();
-    for (final doc in existing.docs) {
-      await FirebaseFirestore.instance.collection('queue').doc(doc.id).delete();
-    }
-    _showSnackBar('Your active queue has been cancelled.');
-  }
-
   BranchModel? _getSelectedBranch() {
     if (selectedBranchId == null) return null;
     try {
@@ -742,375 +777,558 @@ class _DiscoverScreenState extends State<DiscoverScreen> {
     final selectedBranch = _getSelectedBranch();
 
     return Scaffold(
-      backgroundColor: Colors.grey[100],
+      backgroundColor: const Color(0xFFF8F9FA),
+      floatingActionButton: FloatingActionButton.extended(
+        onPressed: () {
+          // Quick refresh/reload functionality
+          _initializeQueueing();
+        },
+        backgroundColor: const Color(0xFFD4AF37),
+        foregroundColor: Colors.white,
+        icon: const Icon(Icons.refresh),
+        label: const Text('Refresh'),
+        elevation: 8,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(16),
+        ),
+      ),
       body: SafeArea(
         child: SingleChildScrollView(
-          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
           child: Column(
-            crossAxisAlignment: CrossAxisAlignment.center,
             children: [
-              const SizedBox(height: 20),
-
-              // Selected branch summary card
-              if (selectedBranch != null)
-                Container(
-                  width: double.infinity,
-                  padding: const EdgeInsets.all(16),
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(16),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withOpacity(0.06),
-                        blurRadius: 12,
-                        offset: const Offset(0, 6),
+              // Modern Header with Gradient
+              Container(
+                width: double.infinity,
+                decoration: const BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                    colors: [
+                      Color(0xFFD4AF37),
+                      Color(0xFFB8941F),
+                    ],
+                  ),
+                  borderRadius: BorderRadius.only(
+                    bottomLeft: Radius.circular(30),
+                    bottomRight: Radius.circular(30),
+                  ),
+                ),
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(24, 20, 24, 30),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.all(8),
+                            decoration: BoxDecoration(
+                              color: Colors.white.withOpacity(0.2),
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: const Icon(
+                              Icons.explore,
+                              color: Colors.white,
+                              size: 24,
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          const Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  'Join a Queue',
+                                  style: TextStyle(
+                                    fontSize: 24,
+                                    fontWeight: FontWeight.bold,
+                                    color: Colors.white,
+                                  ),
+                                ),
+                                Text(
+                                  'Find the best barbershop near you',
+                                  style: TextStyle(
+                                    fontSize: 14,
+                                    color: Colors.white70,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
                       ),
                     ],
                   ),
-                  child: Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
+                ),
+              ),
+
+              // Content with padding
+              Padding(
+                padding: const EdgeInsets.all(24),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // Selected branch summary card with enhanced design
+                    if (selectedBranch != null)
                       Container(
-                        padding: const EdgeInsets.all(12),
-                        decoration: const BoxDecoration(
-                          color: Color(0xFFD4AF37),
-                          shape: BoxShape.circle,
+                        width: double.infinity,
+                        margin: const EdgeInsets.only(bottom: 24),
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(20),
+                          boxShadow: [
+                            BoxShadow(
+                              color: const Color(0xFFD4AF37).withOpacity(0.15),
+                              blurRadius: 20,
+                              offset: const Offset(0, 8),
+                            ),
+                          ],
                         ),
-                        child:
-                            const Icon(Icons.place, color: Color(0xFF1A0F0A)),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
                         child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Text(
-                              selectedBranch.name,
-                              style: const TextStyle(
-                                fontSize: 16,
-                                fontWeight: FontWeight.bold,
-                                color: Color(0xFF1A0F0A),
-                              ),
-                              maxLines: 2,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                            const SizedBox(height: 2),
-                            Text(
-                              selectedBranch.location,
-                              style: const TextStyle(
-                                fontSize: 12,
-                                color: Colors.grey,
-                              ),
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                            const SizedBox(height: 6),
-                            Wrap(
-                              spacing: 12,
-                              runSpacing: 8,
-                              children: [
-                                _InfoChip(
-                                  icon: Icons.near_me,
-                                  label: _formatDistancePref(
-                                      _selectedDistanceKm, _drivingKm),
+                            // Header with branch info
+                            Container(
+                              padding: const EdgeInsets.all(20),
+                              decoration: const BoxDecoration(
+                                color: Color(0xFFD4AF37),
+                                borderRadius: BorderRadius.only(
+                                  topLeft: Radius.circular(20),
+                                  topRight: Radius.circular(20),
                                 ),
-                                if (_peopleAhead != null)
-                                  _InfoChip(
-                                    icon: Icons.people,
-                                    label: 'Ahead: $_peopleAhead',
+                              ),
+                              child: Row(
+                                children: [
+                                  Container(
+                                    padding: const EdgeInsets.all(12),
+                                    decoration: BoxDecoration(
+                                      color: Colors.white.withOpacity(0.2),
+                                      borderRadius: BorderRadius.circular(12),
+                                    ),
+                                    child: const Icon(
+                                      Icons.store,
+                                      color: Colors.white,
+                                      size: 24,
+                                    ),
                                   ),
-                                _InfoChip(
-                                  icon: Icons.timelapse,
-                                  label: _formatWaitPref(
-                                      _estimatedWaitMin, _drivingMinutes),
-                                ),
-                              ],
+                                  const SizedBox(width: 16),
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      children: [
+                                        Text(
+                                          selectedBranch.name,
+                                          style: const TextStyle(
+                                            fontSize: 18,
+                                            fontWeight: FontWeight.bold,
+                                            color: Colors.white,
+                                          ),
+                                          maxLines: 2,
+                                          overflow: TextOverflow.ellipsis,
+                                        ),
+                                        const SizedBox(height: 4),
+                                        Text(
+                                          selectedBranch.location,
+                                          style: const TextStyle(
+                                            fontSize: 14,
+                                            color: Colors.white70,
+                                          ),
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                  IconButton(
+                                    onPressed: () =>
+                                        _showWhyBranchDialog(selectedBranch),
+                                    icon: const Icon(
+                                      Icons.info_outline,
+                                      color: Colors.white,
+                                    ),
+                                    tooltip: 'Why this branch?',
+                                  ),
+                                ],
+                              ),
+                            ),
+
+                            // Info chips section
+                            Padding(
+                              padding: const EdgeInsets.all(20),
+                              child: Wrap(
+                                spacing: 12,
+                                runSpacing: 12,
+                                children: [
+                                  _EnhancedInfoChip(
+                                    icon: Icons.near_me,
+                                    label: _formatDistancePref(
+                                        _selectedDistanceKm, _drivingKm),
+                                    color: const Color(0xFF4CAF50),
+                                  ),
+                                  if (_peopleAhead != null)
+                                    _EnhancedInfoChip(
+                                      icon: Icons.people,
+                                      label: 'Ahead: $_peopleAhead',
+                                      color: const Color(0xFF2196F3),
+                                    ),
+                                  _EnhancedInfoChip(
+                                    icon: Icons.timelapse,
+                                    label: _formatWaitPref(
+                                        _estimatedWaitMin, _drivingMinutes),
+                                    color: const Color(0xFFFF9800),
+                                  ),
+                                ],
+                              ),
                             ),
                           ],
                         ),
                       ),
-                      IconButton(
-                        icon: const Icon(Icons.info_outline),
-                        onPressed: () => _showWhyBranchDialog(selectedBranch),
-                        tooltip: 'Why this branch?',
-                      ),
-                    ],
-                  ),
-                ),
 
-              const SizedBox(height: 20),
+                    // Enhanced Branch Selection
+                    _CustomDropdownField(
+                      label: 'Select Branch',
+                      icon: Icons.store,
+                      value: selectedBranchId,
+                      onChanged: (value) async {
+                        setState(() {
+                          selectedBranchId = value;
+                          selectedService = null;
+                          _selectedDistanceKm = null;
+                          _peopleAhead = null;
+                          _estimatedWaitMin = null;
+                          _drivingKm = null;
+                          _drivingMinutes = null;
+                        });
 
-              // Branch selection
-              DropdownButtonFormField<String>(
-                isExpanded: true,
-                decoration: InputDecoration(
-                  filled: true,
-                  fillColor: Colors.white,
-                  labelText: 'Select Branch',
-                  border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12)),
-                  contentPadding:
-                      const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                ),
-                value: selectedBranchId,
-                onChanged: (value) async {
-                  setState(() {
-                    selectedBranchId = value;
-                    selectedService = null;
-                    _selectedDistanceKm = null;
-                    _peopleAhead = null;
-                    _estimatedWaitMin = null;
-                    _drivingKm = null;
-                    _drivingMinutes = null;
-                  });
+                        final branch = _getSelectedBranch();
+                        if (branch != null) {
+                          try {
+                            final pos =
+                                _userPosition ?? await _getPrecisePosition();
+                            _userPosition = pos;
 
-                  final branch = _getSelectedBranch();
-                  if (branch != null) {
-                    try {
-                      final pos = _userPosition ?? await _getPrecisePosition();
-                      _userPosition = pos;
+                            // Get both straight-line and driving distances
+                            final straightLineDist =
+                                await _computeDistanceKm(pos, branch);
+                            final drivingData =
+                                await _getDrivingDistanceAndTime(pos, branch);
 
-                      // Get both straight-line and driving distances
-                      final straightLineDist =
-                          await _computeDistanceKm(pos, branch);
-                      final drivingData =
-                          await _getDrivingDistanceAndTime(pos, branch);
+                            // Use driving distance if available, otherwise fallback to straight-line
+                            final distanceKm = drivingData?['km'] as double? ??
+                                straightLineDist;
 
-                      // Use driving distance if available, otherwise fallback to straight-line
-                      final distanceKm =
-                          drivingData?['km'] as double? ?? straightLineDist;
+                            final aheadSnapshot = await FirebaseFirestore
+                                .instance
+                                .collection('queue')
+                                .where('branchId', isEqualTo: branch.id)
+                                .where('status', isEqualTo: 'pending')
+                                .get();
+                            final peopleAhead = aheadSnapshot.size;
+                            final perPerson =
+                                _getPerPersonMinutes(selectedService);
 
-                      final aheadSnapshot = await FirebaseFirestore.instance
-                          .collection('queue')
-                          .where('branchId', isEqualTo: branch.id)
-                          .where('status', isEqualTo: 'pending')
-                          .get();
-                      final peopleAhead = aheadSnapshot.size;
-                      final perPerson = _getPerPersonMinutes(selectedService);
+                            // Use driving time if available for more accurate wait estimation
+                            final drivingTime = drivingData?['minutes'] as int?;
+                            final waitMin = drivingTime != null
+                                ? ((peopleAhead * perPerson) +
+                                        max(5, drivingTime))
+                                    .toInt()
+                                : ((peopleAhead * perPerson) +
+                                        max(5, distanceKm))
+                                    .toInt();
 
-                      // Use driving time if available for more accurate wait estimation
-                      final drivingTime = drivingData?['minutes'] as int?;
-                      final waitMin = drivingTime != null
-                          ? ((peopleAhead * perPerson) + max(5, drivingTime))
-                              .toInt()
-                          : ((peopleAhead * perPerson) + max(5, distanceKm))
-                              .toInt();
+                            setState(() {
+                              _selectedDistanceKm = distanceKm;
+                              _peopleAhead = peopleAhead;
+                              _estimatedWaitMin = waitMin;
+                              _drivingKm = drivingData?['km'] as double?;
+                              _drivingMinutes = drivingData?['minutes'] as int?;
+                            });
+                          } catch (e) {
+                            print(
+                                'Error calculating distance for selected branch: $e');
+                          }
+                        }
+                      },
+                      items: branches
+                          .map((b) => DropdownMenuItem(
+                                value: b.id,
+                                child: Text(
+                                  '${b.name} • ${b.location}',
+                                  style: const TextStyle(fontSize: 14),
+                                  overflow: TextOverflow.ellipsis,
+                                  maxLines: 1,
+                                ),
+                              ))
+                          .toList(),
+                    ),
 
-                      setState(() {
-                        _selectedDistanceKm = distanceKm;
-                        _peopleAhead = peopleAhead;
-                        _estimatedWaitMin = waitMin;
-                        _drivingKm = drivingData?['km'] as double?;
-                        _drivingMinutes = drivingData?['minutes'] as int?;
-                      });
-                    } catch (e) {
-                      print(
-                          'Error calculating distance for selected branch: $e');
-                    }
-                  }
-                },
-                items: branches
-                    .map((b) => DropdownMenuItem(
-                          value: b.id,
-                          child: Text(
-                            '${b.name} • ${b.location}',
-                            style: const TextStyle(fontSize: 14),
-                            overflow: TextOverflow.ellipsis,
-                            maxLines: 1,
-                          ),
-                        ))
-                    .toList(),
-              ),
-              const SizedBox(height: 16),
+                    const SizedBox(height: 20),
 
-              // Service selection based on branch
-              DropdownButtonFormField<String>(
-                isExpanded: true,
-                decoration: InputDecoration(
-                  filled: true,
-                  fillColor: Colors.white,
-                  labelText: 'Select Service',
-                  border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12)),
-                  contentPadding:
-                      const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                ),
-                value: selectedService,
-                onChanged: (value) async {
-                  setState(() => selectedService = value);
-                  // Update ETA when service changes
-                  final branch = _getSelectedBranch();
-                  if (branch != null && _selectedDistanceKm != null) {
-                    final aheadSnapshot = await FirebaseFirestore.instance
-                        .collection('queue')
-                        .where('branchId', isEqualTo: branch.id)
-                        .where('status', isEqualTo: 'pending')
-                        .get();
-                    final peopleAhead = aheadSnapshot.size;
-                    final perPerson = _getPerPersonMinutes(selectedService);
-                    setState(() {
-                      _peopleAhead = peopleAhead;
-                      _estimatedWaitMin = ((peopleAhead * perPerson) +
-                              max(5, _selectedDistanceKm!))
-                          .toInt();
-                    });
-                  }
-                },
-                items: (selectedBranch?.services ?? [])
-                    .map((s) => DropdownMenuItem(
-                          value: s,
-                          child: Text(s, overflow: TextOverflow.ellipsis),
-                        ))
-                    .toList(),
-              ),
-              const SizedBox(height: 20),
-
-              if (isPaymentAlert)
-                Container(
-                  padding: const EdgeInsets.all(16),
-                  decoration: BoxDecoration(
-                    color: Colors.red.shade50,
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        _autoPrefilled
-                            ? 'Auto-filled nearest branch and service. Review and confirm.'
-                            : '⚠ Please confirm your queue by completing the payment.',
-                        style: const TextStyle(
-                            color: Colors.red, fontWeight: FontWeight.bold),
-                      ),
-                      const SizedBox(height: 12),
-                      DropdownButtonFormField<String>(
-                        isExpanded: true,
-                        decoration: InputDecoration(
-                          filled: true,
-                          fillColor: Colors.white,
-                          labelText: 'Payment Method',
-                          border: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(12)),
-                          contentPadding: const EdgeInsets.symmetric(
-                              horizontal: 16, vertical: 12),
-                        ),
-                        value: selectedPaymentMethod,
-                        onChanged: (value) =>
-                            setState(() => selectedPaymentMethod = value),
-                        items: paymentMethods
-                            .map((method) => DropdownMenuItem(
-                                  value: method,
-                                  child: Text(method,
-                                      overflow: TextOverflow.ellipsis),
-                                ))
-                            .toList(),
-                      ),
-                      const SizedBox(height: 12),
-                      // Barber preference selection
-                      DropdownButtonFormField<String>(
-                        isExpanded: true,
-                        decoration: InputDecoration(
-                          filled: true,
-                          fillColor: Colors.white,
-                          labelText: 'Barber Preference',
-                          border: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(12)),
-                          contentPadding: const EdgeInsets.symmetric(
-                              horizontal: 16, vertical: 12),
-                        ),
-                        value: _barberPreference,
-                        onChanged: (value) async {
-                          if (value == null) return;
+                    // Enhanced Service Selection
+                    _CustomDropdownField(
+                      label: 'Select Service',
+                      icon: Icons.content_cut,
+                      value: selectedService,
+                      onChanged: (value) async {
+                        setState(() => selectedService = value);
+                        // Update ETA when service changes
+                        final branch = _getSelectedBranch();
+                        if (branch != null && _selectedDistanceKm != null) {
+                          final aheadSnapshot = await FirebaseFirestore.instance
+                              .collection('queue')
+                              .where('branchId', isEqualTo: branch.id)
+                              .where('status', isEqualTo: 'pending')
+                              .get();
+                          final peopleAhead = aheadSnapshot.size;
+                          final perPerson =
+                              _getPerPersonMinutes(selectedService);
                           setState(() {
-                            _barberPreference = value;
+                            _peopleAhead = peopleAhead;
+                            _estimatedWaitMin = ((peopleAhead * perPerson) +
+                                    max(5, _selectedDistanceKm!))
+                                .toInt();
                           });
-                          if (value == 'Request a specific barber') {
-                            // Ask for a note (barber name or seat #) without querying users
-                            final controller = TextEditingController(
-                                text: _requestedBarberNote ?? '');
-                            final note = await showDialog<String>(
-                              context: context,
-                              builder: (context) {
-                                return AlertDialog(
-                                  title:
-                                      const Text('Request a specific barber'),
-                                  content: TextField(
-                                    controller: controller,
-                                    maxLength: 50,
-                                    decoration: const InputDecoration(
-                                      hintText: 'Enter barber name or seat #',
-                                      border: OutlineInputBorder(),
+                        }
+                      },
+                      items: (selectedBranch?.services ?? [])
+                          .map((s) => DropdownMenuItem(
+                                value: s,
+                                child: Text(
+                                  s,
+                                  overflow: TextOverflow.ellipsis,
+                                  maxLines: 1,
+                                ),
+                              ))
+                          .toList(),
+                    ),
+                    const SizedBox(height: 24),
+
+                    // Enhanced Payment Section
+                    if (isPaymentAlert)
+                      Container(
+                        width: double.infinity,
+                        decoration: BoxDecoration(
+                          gradient: LinearGradient(
+                            begin: Alignment.topLeft,
+                            end: Alignment.bottomRight,
+                            colors: [
+                              const Color(0xFFD4AF37).withOpacity(0.1),
+                              const Color(0xFFB8941F).withOpacity(0.05),
+                            ],
+                          ),
+                          borderRadius: BorderRadius.circular(20),
+                          border: Border.all(
+                            color: const Color(0xFFD4AF37).withOpacity(0.3),
+                            width: 1,
+                          ),
+                        ),
+                        child: Padding(
+                          padding: const EdgeInsets.all(24),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              // Header
+                              Row(
+                                children: [
+                                  Container(
+                                    padding: const EdgeInsets.all(8),
+                                    decoration: BoxDecoration(
+                                      color: const Color(0xFFD4AF37)
+                                          .withOpacity(0.2),
+                                      borderRadius: BorderRadius.circular(8),
+                                    ),
+                                    child: const Icon(
+                                      Icons.payment,
+                                      color: Color(0xFFD4AF37),
+                                      size: 20,
                                     ),
                                   ),
-                                  actions: [
-                                    TextButton(
-                                      onPressed: () => Navigator.pop(context),
-                                      child: const Text('Cancel'),
+                                  const SizedBox(width: 12),
+                                  Expanded(
+                                    child: Text(
+                                      _autoPrefilled
+                                          ? 'Review & Confirm Queue'
+                                          : 'Complete Your Queue',
+                                      style: const TextStyle(
+                                        fontSize: 18,
+                                        fontWeight: FontWeight.bold,
+                                        color: Color(0xFF1A0F0A),
+                                      ),
                                     ),
-                                    ElevatedButton(
-                                      onPressed: () => Navigator.pop(
-                                          context, controller.text.trim()),
-                                      child: const Text('Save'),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 8),
+                              Text(
+                                _autoPrefilled
+                                    ? 'We\'ve found the best option for you. Review and confirm your Queue.'
+                                    : 'Please complete your booking details below.',
+                                style: const TextStyle(
+                                  fontSize: 14,
+                                  color: Colors.grey,
+                                ),
+                              ),
+                              const SizedBox(height: 24),
+
+                              // Payment Method Selection
+                              _CustomDropdownField(
+                                label: 'Payment Method',
+                                icon: Icons.credit_card,
+                                value: selectedPaymentMethod,
+                                onChanged: (value) => setState(
+                                    () => selectedPaymentMethod = value),
+                                items: paymentMethods
+                                    .map((method) => DropdownMenuItem(
+                                          value: method,
+                                          child: Text(
+                                            method,
+                                            overflow: TextOverflow.ellipsis,
+                                            maxLines: 1,
+                                          ),
+                                        ))
+                                    .toList(),
+                              ),
+
+                              const SizedBox(height: 20),
+
+                              // Barber Preference Selection
+                              _CustomDropdownField(
+                                label: 'Barber Preference',
+                                icon: Icons.person,
+                                value: _barberPreference,
+                                onChanged: (value) async {
+                                  if (value == null) return;
+                                  setState(() {
+                                    _barberPreference = value;
+                                  });
+                                  if (value == 'Request a specific barber') {
+                                    // Ask for a note (barber name or seat #) without querying users
+                                    final controller = TextEditingController(
+                                        text: _requestedBarberNote ?? '');
+                                    final note = await showDialog<String>(
+                                      context: context,
+                                      builder: (context) {
+                                        return AlertDialog(
+                                          title: const Text(
+                                              'Request a specific barber'),
+                                          content: TextField(
+                                            controller: controller,
+                                            maxLength: 50,
+                                            decoration: const InputDecoration(
+                                              hintText:
+                                                  'Enter barber name or seat #',
+                                              border: OutlineInputBorder(),
+                                            ),
+                                          ),
+                                          actions: [
+                                            TextButton(
+                                              onPressed: () =>
+                                                  Navigator.pop(context),
+                                              child: const Text('Cancel'),
+                                            ),
+                                            ElevatedButton(
+                                              onPressed: () => Navigator.pop(
+                                                  context,
+                                                  controller.text.trim()),
+                                              child: const Text('Save'),
+                                            ),
+                                          ],
+                                        );
+                                      },
+                                    );
+                                    if (!mounted) return;
+                                    if (note == null || note.isEmpty) {
+                                      setState(() {
+                                        _barberPreference =
+                                            'Any available barber';
+                                        _requestedBarberId = null;
+                                        _requestedBarberNote = null;
+                                      });
+                                    } else {
+                                      setState(() {
+                                        _requestedBarberId =
+                                            null; // not used in this mode
+                                        _requestedBarberNote =
+                                            note; // save note
+                                      });
+                                    }
+                                  } else {
+                                    setState(() {
+                                      _requestedBarberId = null;
+                                      _requestedBarberNote = null;
+                                    });
+                                  }
+                                },
+                                items: _preferenceOptions
+                                    .map((o) => DropdownMenuItem(
+                                          value: o,
+                                          child: Text(
+                                            o,
+                                            overflow: TextOverflow.ellipsis,
+                                            maxLines: 1,
+                                          ),
+                                        ))
+                                    .toList(),
+                              ),
+
+                              const SizedBox(height: 24),
+
+                              // Enhanced Action Button
+                              Container(
+                                width: double.infinity,
+                                height: 56,
+                                decoration: BoxDecoration(
+                                  gradient: const LinearGradient(
+                                    begin: Alignment.topLeft,
+                                    end: Alignment.bottomRight,
+                                    colors: [
+                                      Color(0xFFD4AF37),
+                                      Color(0xFFB8941F),
+                                    ],
+                                  ),
+                                  borderRadius: BorderRadius.circular(16),
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color: const Color(0xFFD4AF37)
+                                          .withOpacity(0.3),
+                                      blurRadius: 12,
+                                      offset: const Offset(0, 6),
                                     ),
                                   ],
-                                );
-                              },
-                            );
-                            if (!mounted) return;
-                            if (note == null || note.isEmpty) {
-                              setState(() {
-                                _barberPreference = 'Any available barber';
-                                _requestedBarberId = null;
-                                _requestedBarberNote = null;
-                              });
-                            } else {
-                              setState(() {
-                                _requestedBarberId =
-                                    null; // not used in this mode
-                                _requestedBarberNote = note; // save note
-                              });
-                            }
-                          } else {
-                            setState(() {
-                              _requestedBarberId = null;
-                              _requestedBarberNote = null;
-                            });
-                          }
-                        },
-                        items: _preferenceOptions
-                            .map((o) => DropdownMenuItem(
-                                  value: o,
-                                  child: Text(o),
-                                ))
-                            .toList(),
-                      ),
-                      const SizedBox(height: 16),
-                      ElevatedButton.icon(
-                        icon: const Icon(Icons.flash_on),
-                        label: const Text('Quick Join Now'),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor:
-                              const Color.fromARGB(255, 206, 148, 73),
-                          foregroundColor: Colors.white,
-                          minimumSize: const Size(double.infinity, 48),
-                          shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(12)),
-                        ),
-                        onPressed: confirmPayment,
-                      ),
-                      const SizedBox(height: 8),
-                      TextButton.icon(
-                        onPressed: _cancelActiveQueueIfAny,
-                        icon: const Icon(Icons.cancel, color: Colors.red),
-                        label: const Text(
-                          'Cancel Active Queue',
-                          style: TextStyle(color: Colors.red),
+                                ),
+                                child: ElevatedButton.icon(
+                                  onPressed: confirmPayment,
+                                  style: ElevatedButton.styleFrom(
+                                    backgroundColor: Colors.transparent,
+                                    shadowColor: Colors.transparent,
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(16),
+                                    ),
+                                  ),
+                                  icon: const Icon(
+                                    Icons.flash_on,
+                                    color: Colors.white,
+                                    size: 20,
+                                  ),
+                                  label: const Text(
+                                    'Join Queue Now',
+                                    style: TextStyle(
+                                      fontSize: 16,
+                                      fontWeight: FontWeight.bold,
+                                      color: Colors.white,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
                         ),
                       ),
-                    ],
-                  ),
+                    const SizedBox(height: 40),
+                  ],
                 ),
-              const SizedBox(height: 40),
+              ),
             ],
           ),
         ),
@@ -1119,35 +1337,175 @@ class _DiscoverScreenState extends State<DiscoverScreen> {
   }
 }
 
-class _InfoChip extends StatelessWidget {
+// Enhanced Info Chip with better styling
+class _EnhancedInfoChip extends StatelessWidget {
   final IconData icon;
   final String label;
-  const _InfoChip({required this.icon, required this.label});
+  final Color color;
+
+  const _EnhancedInfoChip({
+    required this.icon,
+    required this.label,
+    required this.color,
+  });
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
       decoration: BoxDecoration(
-        color: const Color(0xFFF7F3E7),
+        color: color.withOpacity(0.1),
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: const Color(0xFFD4AF37)),
+        border: Border.all(color: color.withOpacity(0.3)),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(icon, size: 16, color: const Color(0xFF8B6B12)),
+          Icon(icon, size: 16, color: color),
           const SizedBox(width: 6),
           Text(
             label,
-            style: const TextStyle(
+            style: TextStyle(
               fontSize: 12,
               fontWeight: FontWeight.w600,
-              color: Color(0xFF8B6B12),
+              color: color,
             ),
           ),
         ],
       ),
+    );
+  }
+}
+
+// Custom Dropdown Field with enhanced styling
+class _CustomDropdownField extends StatelessWidget {
+  final String label;
+  final IconData icon;
+  final String? value;
+  final ValueChanged<String?>? onChanged;
+  final List<DropdownMenuItem<String>> items;
+
+  const _CustomDropdownField({
+    required this.label,
+    required this.icon,
+    required this.value,
+    required this.onChanged,
+    required this.items,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.05),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: DropdownButtonFormField<String>(
+        isExpanded: true,
+        decoration: InputDecoration(
+          filled: true,
+          fillColor: Colors.white,
+          labelText: label,
+          prefixIcon: Icon(icon, color: const Color(0xFFD4AF37)),
+          border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(16),
+            borderSide:
+                BorderSide(color: const Color(0xFFD4AF37).withOpacity(0.3)),
+          ),
+          enabledBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(16),
+            borderSide:
+                BorderSide(color: const Color(0xFFD4AF37).withOpacity(0.3)),
+          ),
+          focusedBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(16),
+            borderSide: const BorderSide(color: Color(0xFFD4AF37), width: 2),
+          ),
+          contentPadding:
+              const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+          labelStyle: const TextStyle(
+            color: Color(0xFF1A0F0A),
+            fontWeight: FontWeight.w500,
+          ),
+        ),
+        value: value,
+        onChanged: onChanged,
+        items: items,
+        dropdownColor: Colors.white,
+        style: const TextStyle(
+          fontSize: 14,
+          color: Color(0xFF1A0F0A),
+        ),
+        icon: const Icon(
+          Icons.keyboard_arrow_down,
+          color: Color(0xFFD4AF37),
+        ),
+      ),
+    );
+  }
+}
+
+// Loading Dot Animation
+class _LoadingDot extends StatefulWidget {
+  final int delay;
+
+  const _LoadingDot({required this.delay});
+
+  @override
+  State<_LoadingDot> createState() => _LoadingDotState();
+}
+
+class _LoadingDotState extends State<_LoadingDot>
+    with SingleTickerProviderStateMixin {
+  late AnimationController _controller;
+  late Animation<double> _animation;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      duration: const Duration(milliseconds: 1000),
+      vsync: this,
+    );
+    _animation = Tween<double>(begin: 0.0, end: 1.0).animate(
+      CurvedAnimation(parent: _controller, curve: Curves.easeInOut),
+    );
+
+    Future.delayed(Duration(milliseconds: widget.delay), () {
+      if (mounted) {
+        _controller.repeat(reverse: true);
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: _animation,
+      builder: (context, child) {
+        return Container(
+          width: 8,
+          height: 8,
+          decoration: BoxDecoration(
+            color: const Color(0xFFD4AF37)
+                .withOpacity(0.3 + (_animation.value * 0.7)),
+            shape: BoxShape.circle,
+          ),
+        );
+      },
     );
   }
 }

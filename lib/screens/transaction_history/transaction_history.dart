@@ -110,55 +110,66 @@ class _TransactionHistoryPageState extends State<TransactionHistoryPage> {
     );
   }
 
+  Future<void> _refreshTransactions() async {
+    // Force refresh by rebuilding the StreamBuilder
+    setState(() {});
+    // Add a small delay to show the refresh indicator
+    await Future.delayed(const Duration(milliseconds: 500));
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
         title: const Text("Transaction History"),
       ),
-      body: StreamBuilder<QuerySnapshot>(
-        stream: FirebaseFirestore.instance
-            .collection('transactions')
-            .where('uid', isEqualTo: FirebaseAuth.instance.currentUser?.uid)
-            .orderBy('createdAt', descending: true)
-            .snapshots(),
-        builder: (context, snapshot) {
-          if (snapshot.hasError) {
-            return const Center(child: Text("Error loading transactions."));
-          }
-          if (snapshot.connectionState == ConnectionState.waiting) {
-            return const Center(child: CircularProgressIndicator());
-          }
+      body: RefreshIndicator(
+        onRefresh: _refreshTransactions,
+        child: StreamBuilder<QuerySnapshot>(
+          stream: FirebaseFirestore.instance
+              .collection('transactions')
+              .where('uid', isEqualTo: FirebaseAuth.instance.currentUser?.uid)
+              .orderBy('createdAt', descending: true)
+              .snapshots(),
+          builder: (context, snapshot) {
+            if (snapshot.hasError) {
+              return const Center(child: Text("Error loading transactions."));
+            }
+            if (snapshot.connectionState == ConnectionState.waiting) {
+              return const Center(child: CircularProgressIndicator());
+            }
 
-          final transactions = snapshot.data!.docs;
+            final transactions = snapshot.data!.docs;
 
-          if (transactions.isEmpty) {
-            return const Center(child: Text("No transactions found."));
-          }
+            if (transactions.isEmpty) {
+              return const Center(child: Text("No transactions found."));
+            }
 
-          return ListView.builder(
-            itemCount: transactions.length,
-            itemBuilder: (context, index) {
-              final data = transactions[index].data() as Map<String, dynamic>;
-              return Card(
-                margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                child: ListTile(
-                  title: Text("₱${data['paymentAmount']}"),
-                  subtitle: Text(
-                      "Barber: ${data['barberName'] ?? 'N/A'}\nPaid via ${data['paymentMethod'] ?? 'N/A'}"),
-                  trailing: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      const Icon(Icons.receipt_long),
-                      Text("#${data['queueNumber'] ?? '0'}"),
-                    ],
+            return ListView.builder(
+              itemCount: transactions.length,
+              itemBuilder: (context, index) {
+                final data = transactions[index].data() as Map<String, dynamic>;
+                return Card(
+                  margin:
+                      const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                  child: ListTile(
+                    title: Text("₱${data['paymentAmount']}"),
+                    subtitle: Text(
+                        "Barber: ${data['barberName'] ?? 'N/A'}\nPaid via ${data['paymentMethod'] ?? 'N/A'}"),
+                    trailing: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        const Icon(Icons.receipt_long),
+                        Text("#${data['queueNumber'] ?? '0'}"),
+                      ],
+                    ),
+                    onTap: () => showTransactionDetails(data),
                   ),
-                  onTap: () => showTransactionDetails(data),
-                ),
-              );
-            },
-          );
-        },
+                );
+              },
+            );
+          },
+        ),
       ),
     );
   }

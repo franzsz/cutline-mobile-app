@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:shop/components/network_image_with_loader.dart';
 // constants.dart not needed in this file
 
 class BranchCard extends StatelessWidget {
@@ -9,6 +10,8 @@ class BranchCard extends StatelessWidget {
   final int currentQueueCount; // Number of people in queue
   final int estimatedWaitTime; // Estimated wait time in minutes
   final VoidCallback onTap;
+  final String? phone;
+  final Map<String, double>? coordinates;
 
   const BranchCard({
     super.key,
@@ -19,6 +22,8 @@ class BranchCard extends StatelessWidget {
     this.currentQueueCount = 0,
     this.estimatedWaitTime = 0,
     required this.onTap,
+    this.phone,
+    this.coordinates,
   });
 
   Color _getStatusColor() {
@@ -71,6 +76,14 @@ class BranchCard extends StatelessWidget {
     }
   }
 
+  String _waitBadgeText() {
+    if (currentQueueCount == 0) return 'Ready';
+    if (estimatedWaitTime == 0) return '$currentQueueCount in queue';
+    if (estimatedWaitTime <= 10) return '${estimatedWaitTime}m wait';
+    if (estimatedWaitTime <= 30) return '${estimatedWaitTime}m wait';
+    return '30m+';
+  }
+
   Widget _buildImage() {
     // Check if it's a local asset or network image
     if (image.startsWith('assets/')) {
@@ -84,14 +97,14 @@ class BranchCard extends StatelessWidget {
         },
       );
     } else if (image.startsWith('http')) {
-      return Image.network(
-        image,
+      return SizedBox(
         width: double.infinity,
         height: double.infinity,
-        fit: BoxFit.cover,
-        errorBuilder: (context, error, stackTrace) {
-          return _buildPlaceholderImage();
-        },
+        child: NetworkImageWithLoader(
+          image,
+          fit: BoxFit.cover,
+          radius: 0,
+        ),
       );
     } else {
       return _buildPlaceholderImage();
@@ -204,9 +217,7 @@ class BranchCard extends StatelessWidget {
                             ),
                             const SizedBox(width: 4),
                             Text(
-                              currentQueueCount == 0
-                                  ? 'Ready'
-                                  : '$currentQueueCount',
+                              _waitBadgeText(),
                               style: const TextStyle(
                                 color: Colors.white,
                                 fontSize: 10,
@@ -345,22 +356,44 @@ class BranchCard extends StatelessWidget {
                       const SizedBox(height: 4),
 
                       // View Details Button
-                      Container(
-                        width: double.infinity,
-                        padding: const EdgeInsets.symmetric(vertical: 6),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFFD4AF37),
-                          borderRadius: BorderRadius.circular(6),
-                        ),
-                        child: const Text(
-                          "View Details",
-                          textAlign: TextAlign.center,
-                          style: TextStyle(
-                            color: Color(0xFF1A0F0A),
-                            fontSize: 11,
-                            fontWeight: FontWeight.bold,
+                      Row(
+                        children: [
+                          Expanded(
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(vertical: 6),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFFD4AF37),
+                                borderRadius: BorderRadius.circular(6),
+                              ),
+                              child: const Text(
+                                "View Details",
+                                textAlign: TextAlign.center,
+                                style: TextStyle(
+                                  color: Color(0xFF1A0F0A),
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            ),
                           ),
-                        ),
+                          const SizedBox(width: 6),
+                          if ((phone ?? '').isNotEmpty)
+                            _IconAction(
+                              icon: Icons.call,
+                              tooltip: 'Call',
+                              onTap: () {
+                                // Caller handled by parent via onTap or using a service
+                                onTap();
+                              },
+                            ),
+                          const SizedBox(width: 6),
+                          if ((coordinates ?? {}).isNotEmpty)
+                            _IconAction(
+                              icon: Icons.directions,
+                              tooltip: 'Directions',
+                              onTap: onTap,
+                            ),
+                        ],
                       ),
                     ],
                   ),
@@ -368,6 +401,37 @@ class BranchCard extends StatelessWidget {
               ),
             ),
           ],
+        ),
+      ),
+    );
+  }
+}
+
+class _IconAction extends StatelessWidget {
+  final IconData icon;
+  final String tooltip;
+  final VoidCallback onTap;
+  const _IconAction(
+      {required this.icon, required this.tooltip, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return Tooltip(
+      message: tooltip,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(6),
+        child: Container(
+          padding: const EdgeInsets.all(6),
+          decoration: BoxDecoration(
+            color: const Color(0xFFD4AF37).withOpacity(0.15),
+            borderRadius: BorderRadius.circular(6),
+          ),
+          child: Icon(
+            icon,
+            size: 16,
+            color: const Color(0xFFD4AF37),
+          ),
         ),
       ),
     );

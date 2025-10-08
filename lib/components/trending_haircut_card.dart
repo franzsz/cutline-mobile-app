@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:shop/components/network_image_with_loader.dart';
 import 'package:shop/models/trending_haircut_model.dart';
 
 class TrendingHaircutCard extends StatelessWidget {
@@ -22,30 +23,10 @@ class TrendingHaircutCard extends StatelessWidget {
         },
       );
     } else if (imageUrl.startsWith('http')) {
-      return Image.network(
+      return NetworkImageWithLoader(
         imageUrl,
         fit: BoxFit.cover,
-        loadingBuilder: (context, child, loadingProgress) {
-          if (loadingProgress == null) return child;
-          return Container(
-            color: const Color(0xFFD4AF37).withOpacity(0.1),
-            child: Center(
-              child: CircularProgressIndicator(
-                value: loadingProgress.expectedTotalBytes != null
-                    ? loadingProgress.cumulativeBytesLoaded /
-                        loadingProgress.expectedTotalBytes!
-                    : null,
-                strokeWidth: 2,
-                valueColor: const AlwaysStoppedAnimation<Color>(
-                  Color(0xFFD4AF37),
-                ),
-              ),
-            ),
-          );
-        },
-        errorBuilder: (context, error, stackTrace) {
-          return _buildPlaceholderImage();
-        },
+        radius: 0,
       );
     } else {
       return _buildPlaceholderImage();

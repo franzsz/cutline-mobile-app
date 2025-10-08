@@ -4,6 +4,7 @@ import 'package:flutter_svg/flutter_svg.dart';
 import 'package:flutter/services.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:shop/route/route_constants.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
 
@@ -44,17 +45,14 @@ class _LogInFormState extends State<LogInFormBarber> {
     if (email.isEmpty) return;
 
     try {
-      final doc = await FirebaseFirestore.instance
-          .collection('login_attempts')
-          .doc(email)
-          .get();
+      final prefs = await SharedPreferences.getInstance();
+      final failedAttempts = prefs.getInt('login_failedAttempts_$email') ?? 0;
+      final lockoutUntilMs = prefs.getInt('login_lockoutUntilMs_$email');
 
-      if (doc.exists) {
-        final data = doc.data()!;
-        final failedAttempts = data['failedAttempts'] ?? 0;
-        final lockoutUntil = (data['lockoutUntil'] as Timestamp?)?.toDate();
-
-        if (lockoutUntil != null && DateTime.now().isBefore(lockoutUntil)) {
+      if (lockoutUntilMs != null) {
+        final lockoutUntil =
+            DateTime.fromMillisecondsSinceEpoch(lockoutUntilMs);
+        if (DateTime.now().isBefore(lockoutUntil)) {
           setState(() {
             _isLockedOut = true;
             _remainingLockoutTime =
@@ -62,11 +60,7 @@ class _LogInFormState extends State<LogInFormBarber> {
           });
           _startLockoutTimer();
         } else if (failedAttempts >= maxFailedAttempts) {
-          // Reset if lockout period has expired
-          await FirebaseFirestore.instance
-              .collection('login_attempts')
-              .doc(email)
-              .delete();
+          await _clearFailedAttempts(email);
         }
       }
     } catch (e) {
@@ -95,38 +89,23 @@ class _LogInFormState extends State<LogInFormBarber> {
 
   Future<void> _recordFailedAttempt(String email) async {
     try {
-      final docRef =
-          FirebaseFirestore.instance.collection('login_attempts').doc(email);
+      final prefs = await SharedPreferences.getInstance();
+      final current = prefs.getInt('login_failedAttempts_$email') ?? 0;
+      final updated = current + 1;
+      await prefs.setInt('login_failedAttempts_$email', updated);
 
-      await FirebaseFirestore.instance.runTransaction((transaction) async {
-        final doc = await transaction.get(docRef);
-
-        if (doc.exists) {
-          final data = doc.data()!;
-          final failedAttempts = (data['failedAttempts'] ?? 0) + 1;
-
-          if (failedAttempts >= maxFailedAttempts) {
-            final lockoutUntil =
-                DateTime.now().add(Duration(minutes: lockoutDurationMinutes));
-            transaction.update(docRef, {
-              'failedAttempts': failedAttempts,
-              'lastAttempt': Timestamp.now(),
-              'lockoutUntil': Timestamp.fromDate(lockoutUntil),
-            });
-          } else {
-            transaction.update(docRef, {
-              'failedAttempts': failedAttempts,
-              'lastAttempt': Timestamp.now(),
-            });
-          }
-        } else {
-          transaction.set(docRef, {
-            'failedAttempts': 1,
-            'lastAttempt': Timestamp.now(),
-            'email': email,
-          });
-        }
-      });
+      if (updated >= maxFailedAttempts) {
+        final lockoutUntil =
+            DateTime.now().add(Duration(minutes: lockoutDurationMinutes));
+        await prefs.setInt(
+            'login_lockoutUntilMs_$email', lockoutUntil.millisecondsSinceEpoch);
+        setState(() {
+          _isLockedOut = true;
+          _remainingLockoutTime =
+              lockoutUntil.difference(DateTime.now()).inMinutes;
+        });
+        _startLockoutTimer();
+      }
     } catch (e) {
       print('Error recording failed attempt: $e');
     }
@@ -134,10 +113,9 @@ class _LogInFormState extends State<LogInFormBarber> {
 
   Future<void> _clearFailedAttempts(String email) async {
     try {
-      await FirebaseFirestore.instance
-          .collection('login_attempts')
-          .doc(email)
-          .delete();
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.remove('login_failedAttempts_$email');
+      await prefs.remove('login_lockoutUntilMs_$email');
     } catch (e) {
       print('Error clearing failed attempts: $e');
     }
@@ -216,7 +194,7 @@ class _LogInFormState extends State<LogInFormBarber> {
       } on FirebaseAuthException catch (e) {
         String message = 'Login failed';
         if (e.code == 'user-not-found') {
-          message = 'No user found for that email.';
+          message = 'Account not found. Please sign up.';
         } else if (e.code == 'wrong-password') {
           message = 'Wrong password.';
         }

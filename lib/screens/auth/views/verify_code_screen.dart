@@ -120,7 +120,7 @@ class _VerifyCodeScreenState extends State<VerifyCodeScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            const Text("A verification code has been sent to your email."),
+            Text("A verification code has been sent to ${widget.email}."),
             const SizedBox(height: defaultPadding),
             TextField(
               controller: codeController,

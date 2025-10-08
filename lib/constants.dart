@@ -9,19 +9,13 @@ const String osmTileUrl = 'https://tile.openstreetmap.org/{z}/{x}/{y}.png';
 const String osmAttribution = '© OpenStreetMap contributors';
 const String osrmBaseUrl = 'https://router.project-osrm.org';
 
-// Just for demo
-const productDemoImg1 =
-    "https://scontent.fmnl8-1.fna.fbcdn.net/v/t51.75761-15/489928180_18042244187615243_3566235424005464712_n.jpg?stp=dst-jpg_tt6&_nc_cat=106&ccb=1-7&_nc_sid=127cfc&_nc_ohc=QpisJXYZHZEQ7kNvwGTrLsN&_nc_oc=AdmYPmZ0nByPCAo7K4_tel3ZC0yVGbxB31pJc4xtkoybXe9wWM3PvLvgctmS-jT9VkY&_nc_zt=23&_nc_ht=scontent.fmnl8-1.fna&_nc_gid=EeUAPFGzV9EGhZcgKKeHEQ&oh=00_AfFoUlcv29mza3Mf35iPg79b5GI55uH5xQGmfEM7IR3TEA&oe=6816EE90";
-const productDemoImg2 =
-    "https://scontent.fmnl8-6.fna.fbcdn.net/v/t39.30808-6/471159498_122111343746683168_4568910750180715605_n.jpg?_nc_cat=104&ccb=1-7&_nc_sid=833d8c&_nc_ohc=4-Uq9dn1QjAQ7kNvwFGg310&_nc_oc=AdkTtMs30gp-lxFaMKXGBqQNnSWQHue6ATVehqvpcEQ5pg5coW9S3vgGFYHbIqouw58&_nc_zt=23&_nc_ht=scontent.fmnl8-6.fna&_nc_gid=K3ss6Eem1wXK5q7g3qjYmg&oh=00_AfFgsXe4FY6rLWOeE9uYQ6AHVgShtmyuHW85GkUaQ7nKxg&oe=6816F711";
-const productDemoImg3 =
-    "https://lh3.googleusercontent.com/p/AF1QipNvGkSn0QsGDH7n3qx35Kj5pyM5iw462aQuTfIP=s680-w680-h510-rw";
-const productDemoImg4 =
-    "https://lh3.googleusercontent.com/p/AF1QipNLrjy9l80g8kt3BvK2KW4L9yN_MLmXO95TV80u=s680-w680-h510-rw";
-const productDemoImg5 =
-    "https://lh3.googleusercontent.com/p/AF1QipPH960B4ImyG6hA1Id-THwOJuNu-fIzTjGY-i0j=s680-w680-h510-rw";
-const productDemoImg6 =
-    "https://lh3.googleusercontent.com/p/AF1QipONc1jBVx_oYXBdcocu6-5wjnaW4OU76jOFKG0L=s680-w680-h510-rw";
+// Just for demo (use local stable assets to avoid 403 from CDNs)
+const productDemoImg1 = 'assets/images/supremo barber1.jpg';
+const productDemoImg2 = 'assets/images/login_light.png';
+const productDemoImg3 = 'assets/images/login_dark.png';
+const productDemoImg4 = 'assets/images/signUp_light.png';
+const productDemoImg5 = 'assets/images/signUp_dark.png';
+const productDemoImg6 = 'assets/images/logo.jpg';
 
 // End For demo
 

@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:latlong2/latlong.dart' as ll;
@@ -41,12 +42,15 @@ class _QueueMapTrackingScreenState extends State<QueueMapTrackingScreen>
   // Real-time distance tracking
   double? _currentDistance;
   String? _distanceType;
-  bool _isCheckingProximity = false;
   bool _isLocationLocked = false;
 
   // Location caching
   DateTime? _lastLocationUpdate;
-  static const Duration _locationCacheTimeout = Duration(minutes: 2);
+
+  // Automatic proximity monitoring
+  Timer? _proximityTimer;
+  bool _isAutoMonitoring = false;
+  static const Duration _proximityCheckInterval = Duration(seconds: 30);
 
   // Animation controllers
   late AnimationController _pulseController;
@@ -63,6 +67,8 @@ class _QueueMapTrackingScreenState extends State<QueueMapTrackingScreen>
     super.initState();
     _setupAnimations();
     _getUserLocation();
+    // Start automatic monitoring immediately
+    _startAutomaticProximityMonitoring();
     Future.delayed(const Duration(seconds: 2), () {
       if (mounted && userLocation != null) {
         _calculateInitialDistance();
@@ -127,6 +133,7 @@ class _QueueMapTrackingScreenState extends State<QueueMapTrackingScreen>
 
   @override
   void dispose() {
+    _proximityTimer?.cancel();
     _pulseController.dispose();
     _slideController.dispose();
     super.dispose();
@@ -186,25 +193,20 @@ class _QueueMapTrackingScreenState extends State<QueueMapTrackingScreen>
     final bool aLocked = (a['locked'] as bool?) ?? false;
     final bool bLocked = (b['locked'] as bool?) ?? false;
 
-    if (aLocked != bLocked) return aLocked ? -1 : 1;
-
+    // Locked positions always come first and maintain their fixed position
     if (aLocked && bLocked) {
-      final num aIdx = (a['lockIndex'] as num?) ?? double.maxFinite;
-      final num bIdx = (b['lockIndex'] as num?) ?? double.maxFinite;
-      if (aIdx != bIdx) return aIdx.compareTo(bIdx);
-
-      final Timestamp? aT = a['lockTime'] as Timestamp?;
-      final Timestamp? bT = b['lockTime'] as Timestamp?;
-      if (aT != null && bT != null) return aT.compareTo(bT);
-      if (aT != null) return -1;
-      if (bT != null) return 1;
-      return 0;
+      final num aLockedPos =
+          (a['lockedQueuePosition'] as num?) ?? double.maxFinite;
+      final num bLockedPos =
+          (b['lockedQueuePosition'] as num?) ?? double.maxFinite;
+      return aLockedPos.compareTo(bLockedPos);
     }
 
-    final double d1 = ((a['distance'] as num?) ?? double.maxFinite).toDouble();
-    final double d2 = ((b['distance'] as num?) ?? double.maxFinite).toDouble();
-    if (d1 != d2) return d1.compareTo(d2);
+    // Locked positions always come before unlocked positions
+    if (aLocked != bLocked) return aLocked ? -1 : 1;
 
+    // For unlocked positions, sort by creation time (first come, first served)
+    // This ensures unlocked positions don't jump ahead of each other
     final Timestamp? t1 = a['createdAt'] as Timestamp?;
     final Timestamp? t2 = b['createdAt'] as Timestamp?;
     if (t1 != null && t2 != null) return t1.compareTo(t2);
@@ -240,41 +242,64 @@ class _QueueMapTrackingScreenState extends State<QueueMapTrackingScreen>
         'locked': locked,
         'lockIndex': data['lockIndex'] as num?,
         'lockTime': data['proximityConfirmedAt'] as Timestamp?,
+        'lockedQueuePosition': data['lockedQueuePosition'] as num?,
       };
     }).toList();
 
     list.sort(_compareEntries);
     final idx = list.indexWhere((e) => e['id'] == widget.queueDocId);
     if (idx == -1) return null;
+
+    // If this user's position is locked, return their locked position
+    final userEntry = list[idx];
+    if (userEntry['locked'] == true &&
+        userEntry['lockedQueuePosition'] != null) {
+      return (userEntry['lockedQueuePosition'] as num).toInt();
+    }
+
+    // For unlocked positions, return the current dynamic position
     return idx + 1;
   }
 
-  // Enhanced proximity checking with animations
-  Future<void> _checkProximityManually({bool forceRefresh = false}) async {
-    if (_isCheckingProximity) return;
+  // Automatic proximity monitoring methods
+  void _startAutomaticProximityMonitoring() {
+    if (_isAutoMonitoring) return;
 
     setState(() {
-      _isCheckingProximity = true;
+      _isAutoMonitoring = true;
     });
 
-    // Start pulse animation for checking state
-    _pulseController.forward();
-
-    try {
-      final now = DateTime.now();
-      if (forceRefresh ||
-          _lastLocationUpdate == null ||
-          now.difference(_lastLocationUpdate!) > _locationCacheTimeout) {
-        await _getUserLocation();
-      }
-
-      if (userLocation == null) {
-        if (mounted) {
-          _showErrorSnackBar('Location not available. Please enable GPS.');
-        }
+    _proximityTimer = Timer.periodic(_proximityCheckInterval, (timer) {
+      if (!mounted) {
+        timer.cancel();
         return;
       }
 
+      // Only check if not already locked
+      if (!_isLocationLocked) {
+        _checkProximityAutomatically();
+      }
+    });
+  }
+
+  void _stopAutomaticProximityMonitoring() {
+    _proximityTimer?.cancel();
+    _proximityTimer = null;
+    setState(() {
+      _isAutoMonitoring = false;
+    });
+  }
+
+  Future<void> _checkProximityAutomatically() async {
+    if (_isLocationLocked) return;
+
+    try {
+      // Get fresh location
+      await _getUserLocation();
+
+      if (userLocation == null) return;
+
+      // Calculate distance
       final straightLineDistance = Geolocator.distanceBetween(
         userLocation!.latitude,
         userLocation!.longitude,
@@ -296,64 +321,73 @@ class _QueueMapTrackingScreenState extends State<QueueMapTrackingScreen>
 
       final distanceType = drivingData != null ? 'driving' : 'straight-line';
 
-      setState(() {
-        _currentDistance = distance;
-        _distanceType = distanceType;
-      });
-
-      if (distance <= _proximityThreshold) {
-        final lockPos = await _computeCurrentDynamicIndex();
-
-        await FirebaseFirestore.instance.runTransaction((txn) async {
-          final ref = FirebaseFirestore.instance
-              .collection('queue')
-              .doc(widget.queueDocId);
-
-          txn.update(ref, {
-            'proximityConfirmed': true,
-            'proximityConfirmedAt': FieldValue.serverTimestamp(),
-            'proximityConfirmedLocation': {
-              'latitude': userLocation!.latitude,
-              'longitude': userLocation!.longitude,
-            },
-            'proximityDistance': distance,
-            'proximityDistanceType': distanceType,
-            'lockIndex': lockPos ?? 999999,
-          });
+      if (mounted) {
+        setState(() {
+          _currentDistance = distance;
+          _distanceType = distanceType;
         });
+      }
 
-        // Trigger success animation
-        _slideController
-          ..reset()
-          ..forward();
-
-        if (mounted) {
-          _showSuccessSnackBar(
-            'Proximity confirmed! Position locked at ${distance.toStringAsFixed(1)}m away.',
-          );
-        }
-
-        NotificationService.showNotification(
-          title: 'Proximity Confirmed!',
-          body:
-              'Your queue position is now locked. You\'re within ${_proximityThreshold.toStringAsFixed(0)}m of the branch.',
-        );
-      } else {
-        if (mounted) {
-          _showWarningSnackBar(
-            'Too far! You\'re ${distance.toStringAsFixed(1)}m away. Get within ${_proximityThreshold.toStringAsFixed(0)}m to lock your position.',
-          );
-        }
+      // If within threshold, automatically lock position
+      if (distance <= _proximityThreshold) {
+        await _lockPositionAutomatically(distance, distanceType);
       }
     } catch (e) {
-      if (mounted) {
-        _showErrorSnackBar('Error checking proximity: $e');
-      }
-    } finally {
-      _pulseController.stop();
-      setState(() {
-        _isCheckingProximity = false;
+      // Silently handle errors for automatic checking
+      debugPrint('Automatic proximity check error: $e');
+    }
+  }
+
+  Future<void> _lockPositionAutomatically(
+      double distance, String distanceType) async {
+    try {
+      final lockPos = await _computeCurrentDynamicIndex();
+
+      await FirebaseFirestore.instance.runTransaction((txn) async {
+        final ref = FirebaseFirestore.instance
+            .collection('queue')
+            .doc(widget.queueDocId);
+
+        txn.update(ref, {
+          'proximityConfirmed': true,
+          'proximityConfirmedAt': FieldValue.serverTimestamp(),
+          'proximityConfirmedLocation': {
+            'latitude': userLocation!.latitude,
+            'longitude': userLocation!.longitude,
+          },
+          'proximityDistance': distance,
+          'proximityDistanceType': distanceType,
+          'lockIndex': lockPos ?? 999999,
+          'lockedQueuePosition':
+              lockPos ?? 999999, // Store the fixed queue position
+        });
       });
+
+      // Stop automatic monitoring since position is now locked
+      _stopAutomaticProximityMonitoring();
+
+      setState(() {
+        _isLocationLocked = true;
+      });
+
+      // Trigger success animation
+      _slideController
+        ..reset()
+        ..forward();
+
+      if (mounted) {
+        _showSuccessSnackBar(
+          'Position automatically locked! You\'re ${distance.toStringAsFixed(1)}m away.',
+        );
+      }
+
+      NotificationService.showNotification(
+        title: 'Position Auto-Locked!',
+        body:
+            'Your queue position has been automatically locked at #${lockPos ?? 999999}. You\'re within ${_proximityThreshold.toStringAsFixed(0)}m of the branch.',
+      );
+    } catch (e) {
+      debugPrint('Error auto-locking position: $e');
     }
   }
 
@@ -369,24 +403,6 @@ class _QueueMapTrackingScreenState extends State<QueueMapTrackingScreen>
           ],
         ),
         backgroundColor: Colors.green.shade600,
-        behavior: SnackBarBehavior.floating,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-        duration: const Duration(seconds: 4),
-      ),
-    );
-  }
-
-  void _showWarningSnackBar(String message) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Row(
-          children: [
-            const Icon(Icons.warning, color: Colors.white),
-            const SizedBox(width: 12),
-            Expanded(child: Text(message)),
-          ],
-        ),
-        backgroundColor: Colors.orange.shade600,
         behavior: SnackBarBehavior.floating,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
         duration: const Duration(seconds: 4),
@@ -782,12 +798,9 @@ class _QueueMapTrackingScreenState extends State<QueueMapTrackingScreen>
                                     const SizedBox(height: 8),
                                     _MapCircleButton(
                                       icon: Icons.gps_fixed,
-                                      tooltip: 'Check proximity',
-                                      onPressed: _isCheckingProximity
-                                          ? null
-                                          : () => _checkProximityManually(
-                                              forceRefresh: true),
-                                      showProgress: _isCheckingProximity,
+                                      tooltip: 'Refresh location',
+                                      onPressed: _recenterMap,
+                                      showProgress: false,
                                     ),
                                   ],
                                 ),
@@ -911,6 +924,7 @@ class _QueueMapTrackingScreenState extends State<QueueMapTrackingScreen>
             'locked': (d['proximityConfirmed'] as bool?) ?? false,
             'lockIndex': d['lockIndex'] as num?,
             'lockTime': d['proximityConfirmedAt'] as Timestamp?,
+            'lockedQueuePosition': d['lockedQueuePosition'] as num?,
           };
         }).toList();
 
@@ -920,6 +934,8 @@ class _QueueMapTrackingScreenState extends State<QueueMapTrackingScreen>
         final isLocked = position != -1
             ? ((entries[position]['locked'] as bool?) ?? false)
             : false;
+
+        // Always use current position in the sorted queue
         final currentPosition = position == -1 ? null : position + 1;
 
         return Container(
@@ -1180,7 +1196,7 @@ class _QueueMapTrackingScreenState extends State<QueueMapTrackingScreen>
       case 'in_service':
         backgroundColor = Colors.green.shade100;
         textColor = Colors.green.shade700;
-        icon = Icons.support_agent;
+        icon = Icons.content_cut;
         break;
       case 'completed':
         backgroundColor = Colors.grey.shade300;
@@ -1340,48 +1356,63 @@ class _QueueMapTrackingScreenState extends State<QueueMapTrackingScreen>
             ),
           ],
           const SizedBox(height: 20),
-          Row(
-            children: [
-              Expanded(
-                child: ElevatedButton.icon(
-                  onPressed:
-                      _isCheckingProximity ? null : _checkProximityManually,
-                  icon: AnimatedBuilder(
-                    animation: _pulseAnimation,
-                    builder: (context, child) {
-                      return Transform.scale(
-                        scale:
-                            _isCheckingProximity ? _pulseAnimation.value : 1.0,
-                        child: _isCheckingProximity
-                            ? const SizedBox(
-                                width: 20,
-                                height: 20,
-                                child: CircularProgressIndicator(
-                                  strokeWidth: 2,
-                                  valueColor: AlwaysStoppedAnimation<Color>(
-                                      Colors.white),
-                                ),
-                              )
-                            : const Icon(Icons.my_location),
-                      );
-                    },
-                  ),
-                  label:
-                      Text(_isCheckingProximity ? 'Checking...' : 'Check Now'),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: _isCheckingProximity
-                        ? Colors.grey
-                        : Colors.orange.shade600,
-                    foregroundColor: Colors.white,
-                    padding: const EdgeInsets.symmetric(vertical: 16),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    elevation: _isCheckingProximity ? 2 : 4,
+          // Auto-monitoring status indicator
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            decoration: BoxDecoration(
+              color: _isLocationLocked
+                  ? Colors.green.shade50
+                  : Colors.blue.shade50,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(
+                color: _isLocationLocked
+                    ? Colors.green.shade200
+                    : Colors.blue.shade200,
+              ),
+            ),
+            child: Row(
+              children: [
+                Icon(
+                  _isLocationLocked ? Icons.lock : Icons.radar,
+                  size: 20,
+                  color: _isLocationLocked
+                      ? Colors.green.shade600
+                      : Colors.blue.shade600,
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        _isLocationLocked
+                            ? 'Position Locked!'
+                            : 'Auto-Monitoring Active',
+                        style: TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w600,
+                          color: _isLocationLocked
+                              ? Colors.green.shade700
+                              : Colors.blue.shade700,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        _isLocationLocked
+                            ? 'Your queue position is secured within 50m of the branch'
+                            : 'Your location is being monitored every 30s. Position will auto-lock when you\'re within 50m.',
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: _isLocationLocked
+                              ? Colors.green.shade600
+                              : Colors.blue.shade600,
+                        ),
+                      ),
+                    ],
                   ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
         ],
       ),
@@ -1448,6 +1479,7 @@ class _QueueMapTrackingScreenState extends State<QueueMapTrackingScreen>
             'locked': (d['proximityConfirmed'] as bool?) ?? false,
             'lockIndex': d['lockIndex'] as num?,
             'lockTime': d['proximityConfirmedAt'] as Timestamp?,
+            'lockedQueuePosition': d['lockedQueuePosition'] as num?,
             'status': d['status'] ?? 'pending',
           };
         }).toList();
@@ -1458,14 +1490,31 @@ class _QueueMapTrackingScreenState extends State<QueueMapTrackingScreen>
             entries.indexWhere((e) => e['id'] == widget.queueDocId);
 
         if (position != -1) {
-          final currentPosition = position + 1;
           final isLocked = (entries[position]['locked'] as bool?) ?? false;
 
+          // Always use current position in the sorted queue (position + 1)
+          final currentPosition = position + 1;
+
           if (_lastQueuePosition != null &&
-              currentPosition < _lastQueuePosition!) {
+              currentPosition != _lastQueuePosition!) {
+            String notificationTitle;
+            String notificationBody;
+
+            if (currentPosition < _lastQueuePosition!) {
+              // Position improved - someone ahead was served or cancelled
+              notificationTitle = 'Queue Update - Position Improved!';
+              notificationBody =
+                  'Your position moved from #${_lastQueuePosition} to #$currentPosition! Someone ahead was served or cancelled.';
+            } else {
+              // Position got worse (someone joined ahead)
+              notificationTitle = 'Queue Update - Position Changed';
+              notificationBody =
+                  'Your position is now #$currentPosition (was #${_lastQueuePosition}). Someone joined ahead of you.';
+            }
+
             NotificationService.showNotification(
-              title: 'Queue Update',
-              body: 'Your position is now #$currentPosition!',
+              title: notificationTitle,
+              body: notificationBody,
             );
           }
           _lastQueuePosition = currentPosition;
@@ -1741,6 +1790,7 @@ class _QueueMapTrackingScreenState extends State<QueueMapTrackingScreen>
             'locked': (d['proximityConfirmed'] as bool?) ?? false,
             'lockIndex': d['lockIndex'] as num?,
             'lockTime': d['proximityConfirmedAt'] as Timestamp?,
+            'lockedQueuePosition': d['lockedQueuePosition'] as num?,
             'status': d['status'] ?? 'pending',
           };
         }).toList();
@@ -1757,8 +1807,11 @@ class _QueueMapTrackingScreenState extends State<QueueMapTrackingScreen>
           final isLocked = entry['locked'] as bool;
           final status = entry['status'] as String;
 
+          // Always use current position in the sorted queue
+          final position = i + 1;
+
           queueTickets.add({
-            'position': i + 1,
+            'position': position,
             'ticket': ticketNumber,
             'isYou': isCurrentUser,
             'isLocked': isLocked,
@@ -1767,6 +1820,8 @@ class _QueueMapTrackingScreenState extends State<QueueMapTrackingScreen>
             'distance': entry['distance'] as double,
           });
         }
+
+        // Queue tickets are already in the correct order from the sorted entries
 
         return Container(
           decoration: BoxDecoration(
@@ -1992,85 +2047,102 @@ class _QueueMapTrackingScreenState extends State<QueueMapTrackingScreen>
                                       Row(
                                         children: [
                                           if (position == 1) ...[
-                                            Container(
-                                              padding:
-                                                  const EdgeInsets.symmetric(
-                                                horizontal: 8,
-                                                vertical: 2,
-                                              ),
-                                              decoration: BoxDecoration(
-                                                color: Colors.green.shade100,
-                                                borderRadius:
-                                                    BorderRadius.circular(8),
-                                              ),
-                                              child: Row(
-                                                mainAxisSize: MainAxisSize.min,
-                                                children: [
-                                                  Icon(
-                                                    Icons.support_agent,
-                                                    size: 12,
-                                                    color:
-                                                        Colors.green.shade600,
-                                                  ),
-                                                  const SizedBox(width: 4),
-                                                  Text(
-                                                    'Being Served',
-                                                    style: TextStyle(
+                                            Flexible(
+                                              child: Container(
+                                                padding:
+                                                    const EdgeInsets.symmetric(
+                                                  horizontal: 8,
+                                                  vertical: 2,
+                                                ),
+                                                decoration: BoxDecoration(
+                                                  color: Colors.green.shade100,
+                                                  borderRadius:
+                                                      BorderRadius.circular(8),
+                                                ),
+                                                child: Row(
+                                                  mainAxisSize:
+                                                      MainAxisSize.min,
+                                                  children: [
+                                                    Icon(
+                                                      Icons.content_cut,
+                                                      size: 12,
                                                       color:
                                                           Colors.green.shade600,
-                                                      fontSize: 10,
-                                                      fontWeight:
-                                                          FontWeight.w600,
                                                     ),
-                                                  ),
-                                                ],
+                                                    const SizedBox(width: 4),
+                                                    Flexible(
+                                                      child: Text(
+                                                        'Being Served',
+                                                        style: TextStyle(
+                                                          color: Colors
+                                                              .green.shade600,
+                                                          fontSize: 10,
+                                                          fontWeight:
+                                                              FontWeight.w600,
+                                                        ),
+                                                        overflow: TextOverflow
+                                                            .ellipsis,
+                                                      ),
+                                                    ),
+                                                  ],
+                                                ),
                                               ),
                                             ),
                                           ] else ...[
                                             if (joinedTime != null)
-                                              Text(
-                                                'Joined ${_formatTimeAgo(joinedTime.toDate())}',
-                                                style: TextStyle(
-                                                  fontSize: 12,
-                                                  color: Colors.grey.shade600,
+                                              Flexible(
+                                                child: Text(
+                                                  'Joined ${_formatTimeAgo(joinedTime.toDate())}',
+                                                  style: TextStyle(
+                                                    fontSize: 12,
+                                                    color: Colors.grey.shade600,
+                                                  ),
+                                                  overflow:
+                                                      TextOverflow.ellipsis,
                                                 ),
-                                                overflow: TextOverflow.ellipsis,
                                               ),
                                           ],
                                           if (isLocked) ...[
                                             const SizedBox(width: 8),
-                                            Container(
-                                              padding:
-                                                  const EdgeInsets.symmetric(
-                                                horizontal: 6,
-                                                vertical: 2,
-                                              ),
-                                              decoration: BoxDecoration(
-                                                color: Colors.green.shade100,
-                                                borderRadius:
-                                                    BorderRadius.circular(6),
-                                              ),
-                                              child: Row(
-                                                mainAxisSize: MainAxisSize.min,
-                                                children: [
-                                                  Icon(
-                                                    Icons.lock,
-                                                    size: 10,
-                                                    color:
-                                                        Colors.green.shade600,
-                                                  ),
-                                                  const SizedBox(width: 2),
-                                                  Text(
-                                                    'Locked',
-                                                    style: TextStyle(
+                                            Flexible(
+                                              child: Container(
+                                                padding:
+                                                    const EdgeInsets.symmetric(
+                                                  horizontal: 6,
+                                                  vertical: 2,
+                                                ),
+                                                decoration: BoxDecoration(
+                                                  color: Colors.green.shade100,
+                                                  borderRadius:
+                                                      BorderRadius.circular(6),
+                                                ),
+                                                child: Row(
+                                                  mainAxisSize:
+                                                      MainAxisSize.min,
+                                                  children: [
+                                                    Icon(
+                                                      Icons.lock,
+                                                      size: 10,
                                                       color:
                                                           Colors.green.shade600,
-                                                      fontSize: 9,
-                                                      fontWeight:
-                                                          FontWeight.w600,
                                                     ),
-                                                  ),
-                                                ],
+                                                    const SizedBox(width: 2),
+                                                    Flexible(
+                                                      child: Text(
+                                                        'Locked',
+                                                        style: TextStyle(
+                                                          color: Colors
+                                                              .green.shade600,
+                                                          fontSize: 9,
+                                                          fontWeight:
+                                                              FontWeight.w600,
+                                                        ),
+                                                        overflow: TextOverflow
+                                                            .ellipsis,
+                                                      ),
+                                                    ),
+                                                  ],
+                                                ),
                                               ),
                                             ),
                                           ],

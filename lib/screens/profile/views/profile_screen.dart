@@ -18,6 +18,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
   final TextEditingController _nameController = TextEditingController();
   String fullName = '';
   String email = '';
+  String? _nameError;
 
   @override
   void initState() {
@@ -40,15 +41,39 @@ class _ProfileScreenState extends State<ProfileScreen> {
     }
   }
 
+  bool _validateName(String name) {
+    if (name.trim().isEmpty) {
+      return false;
+    }
+    // Check for valid characters (letters, spaces, hyphens, apostrophes)
+    final validNameRegex = RegExp(r"^[a-zA-Z\s\-'\.]+$");
+    return validNameRegex.hasMatch(name.trim());
+  }
+
   Future<void> _updateProfile() async {
     final uid = FirebaseAuth.instance.currentUser?.uid;
     final fullName = _nameController.text.trim();
-    if (uid == null || fullName.isEmpty) {
+
+    if (uid == null) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Full name cannot be empty.')),
+        const SnackBar(content: Text('User not authenticated.')),
       );
       return;
     }
+
+    // Validate name
+    if (!_validateName(fullName)) {
+      setState(() {
+        _nameError = "Please enter a valid name";
+      });
+      return;
+    }
+
+    // Clear any previous errors
+    setState(() {
+      _nameError = null;
+    });
+
     try {
       await FirebaseFirestore.instance.collection('users').doc(uid).update({
         'fullName': fullName,
@@ -113,9 +138,24 @@ class _ProfileScreenState extends State<ProfileScreen> {
             ),
           ),
           const SizedBox(height: 16),
-          TextField(
-            controller: _nameController,
-            decoration: const InputDecoration(labelText: "Full Name"),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: defaultPadding),
+            child: TextField(
+              controller: _nameController,
+              decoration: InputDecoration(
+                labelText: "Full Name",
+                errorText: _nameError,
+                border: const OutlineInputBorder(),
+              ),
+              onChanged: (value) {
+                // Clear error when user starts typing
+                if (_nameError != null) {
+                  setState(() {
+                    _nameError = null;
+                  });
+                }
+              },
+            ),
           ),
 
           const SizedBox(height: defaultPadding),
@@ -133,9 +173,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
           const SizedBox(height: defaultPadding),
           const SizedBox(height: 24),
-          ElevatedButton(
-            onPressed: _updateProfile,
-            child: const Text("Save Changes"),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: defaultPadding),
+            child: ElevatedButton(
+              onPressed: _updateProfile,
+              child: const Text("Save Changes"),
+            ),
           ),
 
           // Log Out

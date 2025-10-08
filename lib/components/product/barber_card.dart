@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:shop/components/network_image_with_loader.dart';
 
 class BarberCard extends StatelessWidget {
   final String image;
@@ -28,19 +29,30 @@ class BarberCard extends StatelessWidget {
           children: [
             ClipRRect(
               borderRadius: BorderRadius.circular(50),
-              child: Image.network(
-                image,
+              child: SizedBox(
                 width: 80,
                 height: 80,
-                fit: BoxFit.cover,
-                errorBuilder: (context, error, stackTrace) {
-                  return Container(
-                    width: 80,
-                    height: 80,
-                    color: Colors.grey.shade300,
-                    child: const Icon(Icons.person, color: Colors.white70),
-                  );
-                },
+                child: image.startsWith('http')
+                    ? NetworkImageWithLoader(
+                        image,
+                        fit: BoxFit.cover,
+                        radius: 50,
+                      )
+                    : Image.asset(
+                        image,
+                        width: 80,
+                        height: 80,
+                        fit: BoxFit.cover,
+                        errorBuilder: (context, error, stackTrace) {
+                          return Container(
+                            width: 80,
+                            height: 80,
+                            color: Colors.grey.shade300,
+                            child:
+                                const Icon(Icons.person, color: Colors.white70),
+                          );
+                        },
+                      ),
               ),
             ),
             const SizedBox(height: 8),

@@ -29,18 +29,22 @@ class _PasswordRecoveryScreenState extends State<PasswordRecoveryScreen> {
     try {
       await FirebaseAuth.instance.sendPasswordResetEmail(email: email);
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text("Password reset link sent to $email")),
+        SnackBar(
+          content: Text(
+              "If an account with this email exists, a password reset link has been sent to $email"),
+          backgroundColor: Colors.green,
+        ),
       );
     } on FirebaseAuthException catch (e) {
       String message = "An error occurred.";
-      if (e.code == 'user-not-found') {
-        message = "No user found with that email.";
-      } else if (e.code == 'invalid-email') {
+      if (e.code == 'invalid-email') {
         message = "The email address is not valid.";
+      } else if (e.code == 'too-many-requests') {
+        message = "Too many requests. Please try again later.";
       }
 
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(message)),
+        SnackBar(content: Text(message), backgroundColor: Colors.red),
       );
     } finally {
       setState(() => _isLoading = false);

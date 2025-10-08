@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:shop/components/network_image_with_loader.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:shop/components/product/branch_card.dart';
 import 'package:shop/models/branch_model.dart';
@@ -7,7 +8,8 @@ import 'package:shop/services/rating_service.dart';
 import '../../../../constants.dart';
 
 class PopularProducts extends StatefulWidget {
-  const PopularProducts({super.key});
+  final String searchQuery;
+  const PopularProducts({super.key, this.searchQuery = ''});
 
   @override
   State<PopularProducts> createState() => _PopularProductsState();
@@ -88,7 +90,18 @@ class _PopularProductsState extends State<PopularProducts> {
                 return const Center(child: Text('No branches found.'));
               }
 
-              final branches = docs.map(_branchFromDoc).toList();
+              List<BranchModel> branches = docs.map(_branchFromDoc).toList();
+              final q = widget.searchQuery.trim().toLowerCase();
+              if (q.isNotEmpty) {
+                branches = branches.where((b) {
+                  final inName = b.name.toLowerCase().contains(q);
+                  final inLoc = b.location.toLowerCase().contains(q) ||
+                      b.address.toLowerCase().contains(q);
+                  final inServices =
+                      b.services.any((s) => s.toLowerCase().contains(q));
+                  return inName || inLoc || inServices;
+                }).toList();
+              }
 
               return ListView.builder(
                 scrollDirection: Axis.horizontal,
@@ -650,14 +663,14 @@ class _PopularProductsState extends State<PopularProducts> {
         },
       );
     } else if (imagePath.startsWith('http')) {
-      return Image.network(
-        imagePath,
+      return SizedBox(
         width: double.infinity,
         height: double.infinity,
-        fit: BoxFit.cover,
-        errorBuilder: (context, error, stackTrace) {
-          return _buildPlaceholderImage();
-        },
+        child: NetworkImageWithLoader(
+          imagePath,
+          fit: BoxFit.cover,
+          radius: 0,
+        ),
       );
     } else {
       return _buildPlaceholderImage();
