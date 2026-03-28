@@ -73,6 +73,17 @@ Route<dynamic> generateRoute(RouteSettings settings) {
       return MaterialPageRoute(
         builder: (context) => CashierQueueScreen(branchId: branchId),
       );
+    case cashierTransactionHistoryScreenRoute:
+      if (kAppRole.toLowerCase() != 'cashier') {
+        return MaterialPageRoute(
+          builder: (context) => const OnBordingScreen(),
+        );
+      }
+      final branchId = settings.arguments as String;
+      return MaterialPageRoute(
+        builder: (context) =>
+            CashierTransactionHistoryScreen(branchId: branchId),
+      );
     case employeeNotificationScreenRoute:
       return MaterialPageRoute(
         builder: (context) => const NotificationPage(),

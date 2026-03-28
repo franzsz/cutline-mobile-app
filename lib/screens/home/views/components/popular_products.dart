@@ -21,6 +21,12 @@ class _PopularProductsState extends State<PopularProducts> {
     final data = (doc.data() as Map<String, dynamic>?) ?? {};
     final map = <String, dynamic>{...data, 'id': doc.id};
 
+    // Ensure isActive field is properly set
+    if (map['isActive'] == null) {
+      // If isActive is not set, derive it from status
+      map['isActive'] = map['status'] != null && map['status'] != 'Closed';
+    }
+
     // If status is missing but isActive exists, derive it
     if (map['status'] == null && map['isActive'] != null) {
       map['status'] = map['isActive'] == true ? 'Open' : 'Closed';
@@ -91,6 +97,10 @@ class _PopularProductsState extends State<PopularProducts> {
               }
 
               List<BranchModel> branches = docs.map(_branchFromDoc).toList();
+
+              // Filter to only show active branches
+              branches = branches.where((b) => b.isActive).toList();
+
               final q = widget.searchQuery.trim().toLowerCase();
               if (q.isNotEmpty) {
                 branches = branches.where((b) {
@@ -131,6 +141,7 @@ class _PopularProductsState extends State<PopularProducts> {
                                 : 'Philippines'),
                         status:
                             branch.status.isNotEmpty ? branch.status : 'Closed',
+                        isActive: branch.isActive,
                         currentQueueCount:
                             (queueInfo['currentQueueCount'] ?? 0) as int,
                         estimatedWaitTime:

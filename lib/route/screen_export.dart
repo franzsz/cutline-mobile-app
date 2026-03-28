@@ -30,6 +30,7 @@ export '/screens/user_info/views/user_info_screen.dart';
 export '/screens/Employee_Screen/employeehome_screen.dart';
 export '/screens/Employee_Screen/employee_queue_screen.dart';
 export '/screens/Employee_Screen/cashier_queue_screen.dart';
+export '/screens/Employee_Screen/cashier_transaction_history_screen.dart';
 export '/screens/Employee_Screen/employee_notification_screen.dart';
 export '/screens/Employee_Screen/employee_profile_schedule_screen.dart';
 export '/screens/Employee_Screen/employee_history_screen.dart';

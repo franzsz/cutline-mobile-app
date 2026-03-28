@@ -7,6 +7,7 @@ class BranchCard extends StatelessWidget {
   final String name;
   final String location;
   final String status; // "Open", "Closed", "Busy"
+  final bool isActive; // True if branch is active/available for queue
   final int currentQueueCount; // Number of people in queue
   final int estimatedWaitTime; // Estimated wait time in minutes
   final VoidCallback onTap;
@@ -19,6 +20,7 @@ class BranchCard extends StatelessWidget {
     required this.name,
     required this.location,
     required this.status,
+    required this.isActive,
     this.currentQueueCount = 0,
     this.estimatedWaitTime = 0,
     required this.onTap,
@@ -27,6 +29,11 @@ class BranchCard extends StatelessWidget {
   });
 
   Color _getStatusColor() {
+    // If branch is not active, always show as closed regardless of status
+    if (!isActive) {
+      return const Color(0xFFEA5B5B); // Red
+    }
+
     switch (status.toLowerCase()) {
       case 'open':
         return const Color(0xFF2ED573); // Green
@@ -183,7 +190,7 @@ class BranchCard extends StatelessWidget {
                           borderRadius: BorderRadius.circular(12),
                         ),
                         child: Text(
-                          status,
+                          isActive ? status : 'Inactive',
                           style: const TextStyle(
                             color: Colors.white,
                             fontSize: 10,

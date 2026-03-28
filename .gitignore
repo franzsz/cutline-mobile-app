@@ -44,7 +44,7 @@ app.*.map.json
 
 # Exclude oversized files from repo
 readme image/FlutterShop_Intro.gif
-windows/flutter/ephemeral/flutter_windows.dll.pdb
+windows/flutter/ephemeral/
 
 # Gradle cache files
 .gradle/
@@ -102,3 +102,41 @@ build/
 ios/Pods/
 **/build/
 **/.gradle/
+
+# System files and directories
+AppData/
+.android/
+.vscode/
+.cursor/
+Downloads/
+Documents/
+Desktop/
+Pictures/
+Music/
+Videos/
+Favorites/
+Links/
+Saved Games/
+Searches/
+Tracing/
+VirtualBox VMs/
+eclipse-workspace/
+eclipse/
+my_app/
+ntuser.dat*
+keytool
+AndroidStudioProjects/
+.config/
+.lesshst
+.lim/
+.m2/
+.node_repl_history
+.nuget/
+.p2/
+.packettracer
+.skiko/
+3D Objects/
+Cisco Packet Tracer 8.2.1/
+Contacts/
+MSTeams Support Logs*/
+OneDrive/

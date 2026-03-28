@@ -85,7 +85,7 @@ class _CashierQueueScreenState extends State<CashierQueueScreen> {
       }
     }
     int chosen = 1;
-    while (occupied.contains(chosen) && chosen <= 5) {
+    while (occupied.contains(chosen) && chosen <= 10) {
       chosen++;
     }
     await _db.collection('queue').doc(queueId).update({
@@ -252,7 +252,62 @@ class _CashierQueueScreenState extends State<CashierQueueScreen> {
 
   // Reassign is same as assign in this UI
 
+  Future<String?> _showBarberInputDialog() async {
+    final TextEditingController barberController = TextEditingController();
+
+    return showDialog<String>(
+      context: context,
+      barrierDismissible: false,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: const Text('Assign Barber'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Text(
+                  'Please enter the name of the barber who will perform this service:'),
+              const SizedBox(height: 16),
+              TextField(
+                controller: barberController,
+                decoration: const InputDecoration(
+                  labelText: 'Barber Name',
+                  hintText: 'Enter barber name',
+                  border: OutlineInputBorder(),
+                ),
+                autofocus: true,
+                textCapitalization: TextCapitalization.words,
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(null),
+              child: const Text('Cancel'),
+            ),
+            ElevatedButton(
+              onPressed: () {
+                final barberName = barberController.text.trim();
+                if (barberName.isNotEmpty) {
+                  Navigator.of(context).pop(barberName);
+                } else {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Please enter a barber name')),
+                  );
+                }
+              },
+              child: const Text('Start Service'),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
   Future<void> _startService(String queueId) async {
+    // Show barber input dialog first
+    final String? barberName = await _showBarberInputDialog();
+    if (barberName == null) return; // User cancelled
+
     // Auto-assign first available seat if customer prefers any barber and no seat assigned yet
     final qSnap = await _db.collection('queue').doc(queueId).get();
     final qData = qSnap.data() ?? {};
@@ -278,9 +333,9 @@ class _CashierQueueScreenState extends State<CashierQueueScreen> {
           occupied.add(s);
         }
       }
-      // Pick the smallest available seat number from 1..50
+      // Pick the smallest available seat number from 1..10
       int chosen = 1;
-      while (occupied.contains(chosen) && chosen <= 50) {
+      while (occupied.contains(chosen) && chosen <= 10) {
         chosen++;
       }
       seat = chosen.toString();
@@ -310,6 +365,7 @@ class _CashierQueueScreenState extends State<CashierQueueScreen> {
     await _db.collection('queue').doc(queueId).update({
       'status': 'in_service',
       'startedAt': FieldValue.serverTimestamp(),
+      'assignedBarberName': barberName,
     });
   }
 
@@ -333,6 +389,24 @@ class _CashierQueueScreenState extends State<CashierQueueScreen> {
         (queueData['uid'] as String?)?.isNotEmpty == true
             ? queueData['uid'] as String
             : (queueData['customerId'] as String?);
+    final String? barberId =
+        queueData['barberId'] ?? queueData['requestedBarberId'];
+
+    // Get barber name - prioritize assigned barber name from start service
+    String barberName = queueData['assignedBarberName'] ?? 'Not Assigned';
+
+    // Fallback to looking up by barberId if no assigned name
+    if (barberName == 'Not Assigned' &&
+        barberId != null &&
+        barberId.isNotEmpty) {
+      try {
+        final barberDoc = await _db.collection('users').doc(barberId).get();
+        barberName = barberDoc.data()?['fullName'] ?? 'Unknown Barber';
+      } catch (_) {
+        barberName = 'Unknown Barber';
+      }
+    }
+
     final transactionData = {
       ...queueData,
       // Normalize to capitalized to align with history filters
@@ -347,7 +421,8 @@ class _CashierQueueScreenState extends State<CashierQueueScreen> {
       'uid': customerUid,
       'cashierId': cashierUid,
       'customerId': customerUid,
-      'barberId': queueData['barberId'] ?? queueData['requestedBarberId'],
+      'barberId': barberId,
+      'barberName': barberName,
     };
 
     // Add to transactions collection
@@ -368,16 +443,199 @@ class _CashierQueueScreenState extends State<CashierQueueScreen> {
     }
   }
 
+  Future<void> _editServices(String queueId) async {
+    // Load current additional services from the queue document
+    final qSnap = await _db.collection('queue').doc(queueId).get();
+    final Map<String, dynamic> qData = qSnap.data() ?? {};
+    final List<dynamic> currentList =
+        (qData['additionalServices'] as List?) ?? const <dynamic>[];
+    final Set<String> selectedServices =
+        currentList.map((e) => e.toString()).toSet();
+
+    // Predefined options for quick selection
+    final List<String> options = <String>[
+      'Haircut',
+      'Shave',
+      'Haircut + Shave',
+      'Color',
+      'Beard Trim',
+      'Hair Spa',
+    ];
+
+    final TextEditingController customController = TextEditingController();
+
+    final bool? confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) {
+        return StatefulBuilder(
+          builder: (context, setStateSB) {
+            return AlertDialog(
+              title: const Text('Edit / Add Services'),
+              content: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text('Select additional services:'),
+                    const SizedBox(height: 8),
+                    ...options.map((opt) => CheckboxListTile(
+                          contentPadding: EdgeInsets.zero,
+                          value: selectedServices.contains(opt),
+                          title: Text(opt),
+                          onChanged: (v) {
+                            setStateSB(() {
+                              if (v == true) {
+                                selectedServices.add(opt);
+                              } else {
+                                selectedServices.remove(opt);
+                              }
+                            });
+                          },
+                        )),
+                    const SizedBox(height: 8),
+                    const Text('Add a custom service (optional):'),
+                    const SizedBox(height: 6),
+                    TextField(
+                      controller: customController,
+                      decoration: const InputDecoration(
+                        hintText: 'e.g. Scalp Massage',
+                        border: OutlineInputBorder(),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(context, false),
+                  child: const Text('Cancel'),
+                ),
+                ElevatedButton(
+                  onPressed: () => Navigator.pop(context, true),
+                  child: const Text('Save'),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+
+    if (confirmed == true) {
+      final String? custom = customController.text.trim().isEmpty
+          ? null
+          : customController.text.trim();
+      if (custom != null && custom.isNotEmpty) {
+        selectedServices.add(custom);
+      }
+
+      await _db.collection('queue').doc(queueId).update({
+        'additionalServices': selectedServices.toList(),
+      });
+
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Services updated')),
+      );
+    }
+  }
+
   Future<void> _cancelQueue(String queueId) async {
-    // Delete the queue document completely when cancelled
+    // Persist a cancellation record to transactions, then delete the queue doc
+    final queueDoc = await _db.collection('queue').doc(queueId).get();
+    if (!queueDoc.exists) {
+      await _db.collection('queue').doc(queueId).delete();
+      return;
+    }
+
+    final Map<String, dynamic> queueData = queueDoc.data() ?? {};
+    final String? cashierUid = FirebaseAuth.instance.currentUser?.uid;
+    final String? customerUid =
+        (queueData['uid'] as String?)?.isNotEmpty == true
+            ? queueData['uid'] as String
+            : (queueData['customerId'] as String?);
+    final String? barberId =
+        queueData['barberId'] ?? queueData['requestedBarberId'];
+
+    // Get barber name if available
+    String barberName = queueData['assignedBarberName'] ?? 'Not Assigned';
+    if (barberName == 'Not Assigned' &&
+        barberId != null &&
+        barberId.isNotEmpty) {
+      try {
+        final barberDoc = await _db.collection('users').doc(barberId).get();
+        barberName = barberDoc.data()?['fullName'] ?? 'Unknown Barber';
+      } catch (_) {
+        barberName = 'Unknown Barber';
+      }
+    }
+
+    final Map<String, dynamic> transactionData = {
+      ...queueData,
+      'status': 'Canceled',
+      'completedAt': FieldValue.serverTimestamp(),
+      'transactionId': queueId,
+      'createdAt': queueData['createdAt'] ?? FieldValue.serverTimestamp(),
+      'paymentAmount': 0.0,
+      'paymentMethod': 'N/A',
+      'uid': customerUid,
+      'cashierId': cashierUid,
+      'customerId': customerUid,
+      'barberId': barberId,
+      'barberName': barberName,
+    };
+
+    await _db.collection('transactions').doc(queueId).set(transactionData);
     await _db.collection('queue').doc(queueId).delete();
   }
 
-  Future<void> _togglePriority(String queueId, bool current) async {
-    await _db.collection('queue').doc(queueId).update({
-      'priority': !current,
-      'priorityAt': !current ? FieldValue.serverTimestamp() : null,
-    });
+  Future<void> _markNoShow(String queueId) async {
+    // Persist a no-show record to transactions, then delete the queue doc
+    final queueDoc = await _db.collection('queue').doc(queueId).get();
+    if (!queueDoc.exists) {
+      await _db.collection('queue').doc(queueId).delete();
+      return;
+    }
+
+    final Map<String, dynamic> queueData = queueDoc.data() ?? {};
+    final String? cashierUid = FirebaseAuth.instance.currentUser?.uid;
+    final String? customerUid =
+        (queueData['uid'] as String?)?.isNotEmpty == true
+            ? queueData['uid'] as String
+            : (queueData['customerId'] as String?);
+    final String? barberId =
+        queueData['barberId'] ?? queueData['requestedBarberId'];
+
+    // Get barber name if available
+    String barberName = queueData['assignedBarberName'] ?? 'Not Assigned';
+    if (barberName == 'Not Assigned' &&
+        barberId != null &&
+        barberId.isNotEmpty) {
+      try {
+        final barberDoc = await _db.collection('users').doc(barberId).get();
+        barberName = barberDoc.data()?['fullName'] ?? 'Unknown Barber';
+      } catch (_) {
+        barberName = 'Unknown Barber';
+      }
+    }
+
+    final Map<String, dynamic> transactionData = {
+      ...queueData,
+      'status': 'No-Show',
+      'completedAt': FieldValue.serverTimestamp(),
+      'transactionId': queueId,
+      'createdAt': queueData['createdAt'] ?? FieldValue.serverTimestamp(),
+      'paymentAmount': 0.0,
+      'paymentMethod': 'N/A',
+      'uid': customerUid,
+      'cashierId': cashierUid,
+      'customerId': customerUid,
+      'barberId': barberId,
+      'barberName': barberName,
+    };
+
+    await _db.collection('transactions').doc(queueId).set(transactionData);
+    await _db.collection('queue').doc(queueId).delete();
   }
 
   Future<String> _getUserName(String uid) async {
@@ -535,9 +793,18 @@ class _CashierQueueScreenState extends State<CashierQueueScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Cashier Queue'),
+        title: const Text('Receptionist Queue'),
         centerTitle: true,
         actions: [
+          IconButton(
+            tooltip: 'Transaction History',
+            icon: const Icon(Icons.history),
+            onPressed: () => Navigator.pushNamed(
+              context,
+              cashierTransactionHistoryScreenRoute,
+              arguments: widget.branchId,
+            ),
+          ),
           IconButton(
             tooltip: 'Log out',
             icon: const Icon(Icons.logout),
@@ -759,7 +1026,6 @@ class _CashierQueueScreenState extends State<CashierQueueScreen> {
                       final doc = filtered[index];
                       final data = doc.data();
                       final String status = data['status'] ?? 'pending';
-                      final bool isPriority = data['priority'] == true;
                       final String uid = data['uid'] ?? 'walk-in';
 
                       return FutureBuilder<String>(
@@ -792,54 +1058,57 @@ class _CashierQueueScreenState extends State<CashierQueueScreen> {
                                               fontWeight: FontWeight.w600),
                                         ),
                                       ),
-                                      if (isPriority)
-                                        const Padding(
-                                          padding: EdgeInsets.only(left: 8.0),
-                                          child: Icon(Icons.star,
-                                              color: Colors.amber),
-                                        ),
                                     ],
                                   ),
                                   const SizedBox(height: 6),
                                   if (index == 0)
                                     Container(
                                       margin: const EdgeInsets.only(bottom: 8),
-                                      padding: const EdgeInsets.all(10),
+                                      padding: const EdgeInsets.all(8),
                                       decoration: BoxDecoration(
                                         color: Colors.grey.shade100,
                                         borderRadius: BorderRadius.circular(8),
                                         border: Border.all(
                                             color: Colors.grey.shade300),
                                       ),
-                                      child: Row(
-                                        mainAxisAlignment:
-                                            MainAxisAlignment.spaceBetween,
-                                        children: List.generate(5, (i) {
-                                          final seatNo = i + 1;
-                                          final busy =
-                                              occupiedSeats.contains(seatNo);
-                                          return Column(
-                                            mainAxisSize: MainAxisSize.min,
-                                            children: [
-                                              Icon(
-                                                Icons.event_seat,
-                                                color: busy
-                                                    ? Colors.red
-                                                    : Colors.green,
+                                      child: SingleChildScrollView(
+                                        scrollDirection: Axis.horizontal,
+                                        child: Row(
+                                          mainAxisAlignment:
+                                              MainAxisAlignment.spaceEvenly,
+                                          children: List.generate(10, (i) {
+                                            final seatNo = i + 1;
+                                            final busy =
+                                                occupiedSeats.contains(seatNo);
+                                            return Padding(
+                                              padding:
+                                                  const EdgeInsets.symmetric(
+                                                      horizontal: 2),
+                                              child: Column(
+                                                mainAxisSize: MainAxisSize.min,
+                                                children: [
+                                                  Icon(
+                                                    Icons.event_seat,
+                                                    color: busy
+                                                        ? Colors.red
+                                                        : Colors.green,
+                                                    size: 20,
+                                                  ),
+                                                  const SizedBox(height: 2),
+                                                  Text(
+                                                    '$seatNo',
+                                                    style: TextStyle(
+                                                      color: busy
+                                                          ? Colors.red
+                                                          : Colors.green,
+                                                      fontSize: 10,
+                                                    ),
+                                                  ),
+                                                ],
                                               ),
-                                              const SizedBox(height: 4),
-                                              Text(
-                                                'Seat $seatNo',
-                                                style: TextStyle(
-                                                  color: busy
-                                                      ? Colors.red
-                                                      : Colors.green,
-                                                  fontSize: 12,
-                                                ),
-                                              ),
-                                            ],
-                                          );
-                                        }),
+                                            );
+                                          }),
+                                        ),
                                       ),
                                     ),
                                   Wrap(
@@ -895,6 +1164,16 @@ class _CashierQueueScreenState extends State<CashierQueueScreen> {
                                             minimumSize: const Size(0, 36),
                                           ),
                                         ),
+                                      if (status == 'in_service')
+                                        OutlinedButton.icon(
+                                          onPressed: () =>
+                                              _editServices(doc.id),
+                                          icon: const Icon(Icons.edit),
+                                          label: const Text('Edit/Add Service'),
+                                          style: OutlinedButton.styleFrom(
+                                            minimumSize: const Size(0, 36),
+                                          ),
+                                        ),
                                       TextButton.icon(
                                         onPressed: () => _cancelQueue(doc.id),
                                         icon: const Icon(Icons.close,
@@ -902,6 +1181,14 @@ class _CashierQueueScreenState extends State<CashierQueueScreen> {
                                         label: const Text('Cancel',
                                             style:
                                                 TextStyle(color: Colors.red)),
+                                      ),
+                                      TextButton.icon(
+                                        onPressed: () => _markNoShow(doc.id),
+                                        icon: const Icon(Icons.person_off,
+                                            color: Colors.orange),
+                                        label: const Text('No-Show',
+                                            style: TextStyle(
+                                                color: Colors.orange)),
                                       ),
                                     ],
                                   ),
@@ -913,24 +1200,6 @@ class _CashierQueueScreenState extends State<CashierQueueScreen> {
                                         backgroundColor: status == 'pending'
                                             ? Colors.orange[100]
                                             : Colors.green[100],
-                                      ),
-                                      const SizedBox(width: 8),
-                                      GestureDetector(
-                                        onLongPress: () =>
-                                            _togglePriority(doc.id, isPriority),
-                                        child: Row(
-                                          children: [
-                                            Icon(
-                                              isPriority
-                                                  ? Icons.star
-                                                  : Icons.star_border,
-                                              color: Colors.amber,
-                                              size: 18,
-                                            ),
-                                            const SizedBox(width: 4),
-                                            const Text('Priority'),
-                                          ],
-                                        ),
                                       ),
                                       // Show ETA if available
                                       if (data['etaMeters'] != null) ...[

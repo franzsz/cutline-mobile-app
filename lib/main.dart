@@ -42,7 +42,9 @@ class MyApp extends StatelessWidget {
           final isCashier = kAppRole.toLowerCase() == 'cashier';
           return MaterialApp(
             debugShowCheckedModeBanner: false,
-            title: isCashier ? 'Supremo Barbers (Cashier)' : 'Supremo Barbers',
+            title: isCashier
+                ? 'Supremo Barbers (Receptionist)'
+                : 'Supremo Barbers',
             theme: AppTheme.lightTheme(context),
             darkTheme: AppTheme.darkTheme(context),
             themeMode: themeProvider.themeMode,

@@ -212,6 +212,13 @@ class _DiscoverScreenState extends State<DiscoverScreen> {
     final data = (doc.data() as Map<String, dynamic>?) ?? {};
     final map = <String, dynamic>{...data, 'id': doc.id};
 
+    // Ensure isActive field is properly set
+    if (map['isActive'] == null) {
+      // If isActive is not set, derive it from status
+      map['isActive'] = map['status'] != null && map['status'] != 'Closed';
+    }
+
+    // If status is missing but isActive exists, derive it
     if (map['status'] == null && map['isActive'] != null) {
       map['status'] = map['isActive'] == true ? 'Open' : 'Closed';
     }
@@ -397,11 +404,35 @@ class _DiscoverScreenState extends State<DiscoverScreen> {
     _showRecommendationLoadingDialog();
 
     try {
+      // Filter only active branches with valid coordinates
+      final activeBranches = _branches.where((b) {
+        if (!b.isActive) return false;
+        final coords = b.coordinates;
+        if (coords == null || coords.isEmpty) return false;
+        final lat = (coords['latitude'] ?? 0.0).toDouble();
+        final lng = (coords['longitude'] ?? 0.0).toDouble();
+        // Filter out branches with invalid coordinates (0,0 or null)
+        return lat != 0.0 && lng != 0.0;
+      }).toList();
+      
+      print('Auto-select: Found ${activeBranches.length} active branches with valid coordinates out of ${_branches.length} total');
+      
+      if (activeBranches.isEmpty) {
+        print('No active branches with valid coordinates available for auto-selection');
+        if (mounted) {
+          setState(() {
+            _autoPrefilled = false;
+          });
+        }
+        return;
+      }
+
       final position = await _getPrecisePosition();
       _userPosition = position;
+      print('Auto-select: User position - lat: ${position.latitude}, lng: ${position.longitude}');
 
-      // Convert live branches to the format expected by OSRM service
-      List<Map<String, dynamic>> branchesData = _branches
+      // Convert active branches to the format expected by OSRM service
+      List<Map<String, dynamic>> branchesData = activeBranches
           .map((branch) => {
                 'id': branch.id,
                 'name': branch.name,
@@ -418,15 +449,19 @@ class _DiscoverScreenState extends State<DiscoverScreen> {
                 'coordinates': branch.coordinates,
                 'currentQueueCount': branch.currentQueueCount,
                 'estimatedWaitTime': branch.estimatedWaitTime,
+                'isActive': branch.isActive,
               })
           .toList();
 
       // Find nearest branch using OSRM driving distance
+      print('Auto-select: Calling OSRM service to find nearest branch...');
       final nearestResult =
           await OSRMService.findNearestBranchByDrivingDistance(
         userPosition: position,
         branches: branchesData,
       );
+      
+      print('Auto-select: OSRM result: ${nearestResult != null ? "Found nearest branch" : "No result"}');
 
       if (nearestResult != null) {
         final nearest = nearestResult['branch'] as Map<String, dynamic>;
@@ -435,6 +470,7 @@ class _DiscoverScreenState extends State<DiscoverScreen> {
 
         // Create BranchModel from the nearest branch data
         final nearestBranch = BranchModel.fromMap(nearest);
+        print('Auto-select: Nearest branch found - ${nearestBranch.name} (ID: ${nearestBranch.id})');
 
         // Get straight-line distance as fallback
         final straightLineKm =
@@ -486,19 +522,46 @@ class _DiscoverScreenState extends State<DiscoverScreen> {
             _drivingKm = drivingData?['km'] as double?;
             _drivingMinutes = drivingData?['minutes'] as int?;
           });
+          print('Auto-select: Successfully set branch (${nearestBranch.id}) and service (${initialService ?? "none"})');
+        } else {
+          print('Auto-select: Widget not mounted, skipping state update');
         }
+      } else {
+        print('Auto-select: OSRM returned null, will try fallback');
       }
     } catch (e) {
       print('Auto-select error: $e');
       // Fallback to straight-line distance if OSRM fails
       try {
+        // Filter only active branches with valid coordinates for fallback
+        final activeBranches = _branches.where((b) {
+          if (!b.isActive) return false;
+          final coords = b.coordinates;
+          if (coords == null || coords.isEmpty) return false;
+          final lat = (coords['latitude'] ?? 0.0).toDouble();
+          final lng = (coords['longitude'] ?? 0.0).toDouble();
+          return lat != 0.0 && lng != 0.0;
+        }).toList();
+        
+        print('Auto-select: Fallback - Found ${activeBranches.length} active branches with valid coordinates');
+        
+        if (activeBranches.isEmpty) {
+          print('No active branches with valid coordinates available for fallback auto-selection');
+          if (mounted) {
+            setState(() {
+              _autoPrefilled = false;
+            });
+          }
+          return;
+        }
+
         final position = await _getPrecisePosition();
         _userPosition = position;
 
         BranchModel? nearest;
         double? nearestDistanceKm;
 
-        for (final b in _branches) {
+        for (final b in activeBranches) {
           final km = await _computeDistanceKm(position, b);
           if (nearest == null || km < (nearestDistanceKm ?? double.infinity)) {
             nearest = b;
@@ -547,7 +610,12 @@ class _DiscoverScreenState extends State<DiscoverScreen> {
               _drivingKm = null; // No driving data available
               _drivingMinutes = null;
             });
+            print('Auto-select: Fallback successfully set branch (${nearest.id}) and service (${initialService ?? "none"})');
+          } else {
+            print('Auto-select: Widget not mounted, skipping fallback state update');
           }
+        } else {
+          print('Auto-select: Fallback found no nearest branch');
         }
       } catch (fallbackError) {
         print('Fallback auto-select error: $fallbackError');
@@ -985,122 +1053,184 @@ class _DiscoverScreenState extends State<DiscoverScreen> {
                       ),
 
                     // Enhanced Branch Selection
-                    _CustomDropdownField(
-                      label: 'Select Branch',
-                      icon: Icons.store,
-                      value: selectedBranchId,
-                      onChanged: (value) async {
-                        setState(() {
-                          selectedBranchId = value;
-                          selectedService = null;
-                          _selectedDistanceKm = null;
-                          _peopleAhead = null;
-                          _estimatedWaitMin = null;
-                          _drivingKm = null;
-                          _drivingMinutes = null;
-                        });
-
-                        final branch = _getSelectedBranch();
-                        if (branch != null) {
-                          try {
-                            final pos =
-                                _userPosition ?? await _getPrecisePosition();
-                            _userPosition = pos;
-
-                            // Get both straight-line and driving distances
-                            final straightLineDist =
-                                await _computeDistanceKm(pos, branch);
-                            final drivingData =
-                                await _getDrivingDistanceAndTime(pos, branch);
-
-                            // Use driving distance if available, otherwise fallback to straight-line
-                            final distanceKm = drivingData?['km'] as double? ??
-                                straightLineDist;
-
-                            final aheadSnapshot = await FirebaseFirestore
-                                .instance
-                                .collection('queue')
-                                .where('branchId', isEqualTo: branch.id)
-                                .where('status', isEqualTo: 'pending')
-                                .get();
-                            final peopleAhead = aheadSnapshot.size;
-                            final perPerson =
-                                _getPerPersonMinutes(selectedService);
-
-                            // Use driving time if available for more accurate wait estimation
-                            final drivingTime = drivingData?['minutes'] as int?;
-                            final waitMin = drivingTime != null
-                                ? ((peopleAhead * perPerson) +
-                                        max(5, drivingTime))
-                                    .toInt()
-                                : ((peopleAhead * perPerson) +
-                                        max(5, distanceKm))
-                                    .toInt();
-
-                            setState(() {
-                              _selectedDistanceKm = distanceKm;
-                              _peopleAhead = peopleAhead;
-                              _estimatedWaitMin = waitMin;
-                              _drivingKm = drivingData?['km'] as double?;
-                              _drivingMinutes = drivingData?['minutes'] as int?;
-                            });
-                          } catch (e) {
-                            print(
-                                'Error calculating distance for selected branch: $e');
-                          }
+                    Builder(
+                      builder: (context) {
+                        // Filter active branches and create items list with deduplication
+                        final activeBranches = branches.where((b) => b.isActive).toList();
+                        // Deduplicate by ID to prevent duplicate values
+                        final seenIds = <String>{};
+                        final branchItems = activeBranches
+                            .where((b) => seenIds.add(b.id)) // Only include if ID not seen before
+                            .map((b) => DropdownMenuItem(
+                                  value: b.id,
+                                  child: Text(
+                                    '${b.name} • ${b.location}',
+                                    style: const TextStyle(fontSize: 14),
+                                    overflow: TextOverflow.ellipsis,
+                                    maxLines: 1,
+                                  ),
+                                ))
+                            .toList();
+                        
+                        // Ensure selectedBranchId exists in the items list, otherwise set to null
+                        final validBranchId = selectedBranchId != null &&
+                                branchItems.any((item) => item.value == selectedBranchId)
+                            ? selectedBranchId
+                            : null;
+                        
+                        // If the current selection is invalid, reset it
+                        if (selectedBranchId != null && validBranchId == null) {
+                          WidgetsBinding.instance.addPostFrameCallback((_) {
+                            if (mounted) {
+                              setState(() {
+                                selectedBranchId = null;
+                                selectedService = null;
+                                _selectedDistanceKm = null;
+                                _peopleAhead = null;
+                                _estimatedWaitMin = null;
+                                _drivingKm = null;
+                                _drivingMinutes = null;
+                              });
+                            }
+                          });
                         }
+                        
+                        return _CustomDropdownField(
+                          label: 'Select Branch',
+                          icon: Icons.store,
+                          value: validBranchId,
+                          onChanged: (value) async {
+                            setState(() {
+                              selectedBranchId = value;
+                              selectedService = null;
+                              _selectedDistanceKm = null;
+                              _peopleAhead = null;
+                              _estimatedWaitMin = null;
+                              _drivingKm = null;
+                              _drivingMinutes = null;
+                            });
+
+                            final branch = _getSelectedBranch();
+                            if (branch != null) {
+                              try {
+                                final pos =
+                                    _userPosition ?? await _getPrecisePosition();
+                                _userPosition = pos;
+
+                                // Get both straight-line and driving distances
+                                final straightLineDist =
+                                    await _computeDistanceKm(pos, branch);
+                                final drivingData =
+                                    await _getDrivingDistanceAndTime(pos, branch);
+
+                                // Use driving distance if available, otherwise fallback to straight-line
+                                final distanceKm = drivingData?['km'] as double? ??
+                                    straightLineDist;
+
+                                final aheadSnapshot = await FirebaseFirestore
+                                    .instance
+                                    .collection('queue')
+                                    .where('branchId', isEqualTo: branch.id)
+                                    .where('status', isEqualTo: 'pending')
+                                    .get();
+                                final peopleAhead = aheadSnapshot.size;
+                                final perPerson =
+                                    _getPerPersonMinutes(selectedService);
+
+                                // Use driving time if available for more accurate wait estimation
+                                final drivingTime = drivingData?['minutes'] as int?;
+                                final waitMin = drivingTime != null
+                                    ? ((peopleAhead * perPerson) +
+                                            max(5, drivingTime))
+                                        .toInt()
+                                    : ((peopleAhead * perPerson) +
+                                            max(5, distanceKm))
+                                        .toInt();
+
+                                setState(() {
+                                  _selectedDistanceKm = distanceKm;
+                                  _peopleAhead = peopleAhead;
+                                  _estimatedWaitMin = waitMin;
+                                  _drivingKm = drivingData?['km'] as double?;
+                                  _drivingMinutes = drivingData?['minutes'] as int?;
+                                });
+                              } catch (e) {
+                                print(
+                                    'Error calculating distance for selected branch: $e');
+                              }
+                            }
+                          },
+                          items: branchItems,
+                        );
                       },
-                      items: branches
-                          .map((b) => DropdownMenuItem(
-                                value: b.id,
-                                child: Text(
-                                  '${b.name} • ${b.location}',
-                                  style: const TextStyle(fontSize: 14),
-                                  overflow: TextOverflow.ellipsis,
-                                  maxLines: 1,
-                                ),
-                              ))
-                          .toList(),
                     ),
 
                     const SizedBox(height: 20),
 
                     // Enhanced Service Selection
-                    _CustomDropdownField(
-                      label: 'Select Service',
-                      icon: Icons.content_cut,
-                      value: selectedService,
-                      onChanged: (value) async {
-                        setState(() => selectedService = value);
-                        // Update ETA when service changes
-                        final branch = _getSelectedBranch();
-                        if (branch != null && _selectedDistanceKm != null) {
-                          final aheadSnapshot = await FirebaseFirestore.instance
-                              .collection('queue')
-                              .where('branchId', isEqualTo: branch.id)
-                              .where('status', isEqualTo: 'pending')
-                              .get();
-                          final peopleAhead = aheadSnapshot.size;
-                          final perPerson =
-                              _getPerPersonMinutes(selectedService);
-                          setState(() {
-                            _peopleAhead = peopleAhead;
-                            _estimatedWaitMin = ((peopleAhead * perPerson) +
-                                    max(5, _selectedDistanceKm!))
-                                .toInt();
+                    Builder(
+                      builder: (context) {
+                        // Get available services for the selected branch with deduplication
+                        final availableServices = selectedBranch?.services ?? [];
+                        // Deduplicate service names to prevent duplicate values
+                        final seenServices = <String>{};
+                        final serviceItems = availableServices
+                            .where((s) => seenServices.add(s)) // Only include if service not seen before
+                            .map((s) => DropdownMenuItem(
+                                  value: s,
+                                  child: Text(
+                                    s,
+                                    overflow: TextOverflow.ellipsis,
+                                    maxLines: 1,
+                                  ),
+                                ))
+                            .toList();
+                        
+                        // Ensure selectedService exists in the items list, otherwise set to null
+                        final validService = selectedService != null &&
+                                serviceItems.any((item) => item.value == selectedService)
+                            ? selectedService
+                            : null;
+                        
+                        // If the current selection is invalid, reset it
+                        if (selectedService != null && validService == null) {
+                          WidgetsBinding.instance.addPostFrameCallback((_) {
+                            if (mounted) {
+                              setState(() {
+                                selectedService = null;
+                              });
+                            }
                           });
                         }
+                        
+                        return _CustomDropdownField(
+                          label: 'Select Service',
+                          icon: Icons.content_cut,
+                          value: validService,
+                          onChanged: (value) async {
+                            setState(() => selectedService = value);
+                            // Update ETA when service changes
+                            final branch = _getSelectedBranch();
+                            if (branch != null && _selectedDistanceKm != null) {
+                              final aheadSnapshot = await FirebaseFirestore.instance
+                                  .collection('queue')
+                                  .where('branchId', isEqualTo: branch.id)
+                                  .where('status', isEqualTo: 'pending')
+                                  .get();
+                              final peopleAhead = aheadSnapshot.size;
+                              final perPerson =
+                                  _getPerPersonMinutes(selectedService);
+                              setState(() {
+                                _peopleAhead = peopleAhead;
+                                _estimatedWaitMin = ((peopleAhead * perPerson) +
+                                        max(5, _selectedDistanceKm!))
+                                    .toInt();
+                              });
+                            }
+                          },
+                          items: serviceItems,
+                        );
                       },
-                      items: (selectedBranch?.services ?? [])
-                          .map((s) => DropdownMenuItem(
-                                value: s,
-                                child: Text(
-                                  s,
-                                  overflow: TextOverflow.ellipsis,
-                                  maxLines: 1,
-                                ),
-                              ))
-                          .toList(),
                     ),
                     const SizedBox(height: 24),
 

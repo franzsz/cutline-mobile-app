@@ -6,4 +6,4 @@ const String kAppRole =
 
 // Hardwire cashier app to a specific branch when building cashier flavor
 // Replace with your Firestore branch document id
-const String kHardwiredBranchId = 'WQ5I5XIFOSwII4LnxB55';
+const String kHardwiredBranchId = 'wQ5l5XIFOSwII4LnxB55';

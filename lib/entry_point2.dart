@@ -1,6 +1,7 @@
 import 'package:animations/animations.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
+import 'package:shop/app_config.dart';
 import 'package:shop/constants.dart';
 import 'package:shop/route/screen_export.dart';
 
@@ -14,7 +15,7 @@ class EntryPoint2 extends StatefulWidget {
 class _EntryPointState extends State<EntryPoint2> {
   final List _pages = const [
     CashierQueueScreen(
-      branchId: '1',
+      branchId: kHardwiredBranchId,
     ),
     QueueManagementPage(),
     ServiceLogPage(),

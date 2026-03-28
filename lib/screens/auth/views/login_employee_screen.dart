@@ -32,7 +32,7 @@ class _LoginScreenState extends State<LoginEmployeeScreen> {
                   crossAxisAlignment: CrossAxisAlignment.center,
                   children: [
                     Text(
-                      "Welcome, Cashier!",
+                      "Welcome, Receptionist!",
                       style: Theme.of(context).textTheme.headlineSmall,
                       textAlign: TextAlign.center,
                     ),

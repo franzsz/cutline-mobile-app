@@ -68,6 +68,8 @@ const String employeeProfileScreenRoute = "employee_profile";
 const String employeeHistoryScreenRoute = "employee_historylogs";
 const String queueMapTrackingRoute = 'queue-tracking';
 const String transactionHistoryScreenRoute = 'customer_transaction_history';
+const String cashierTransactionHistoryScreenRoute =
+    'cashier_transaction_history';
 const String onlinePaymentRoute = 'online_payment';
 const String splashScreenRoute = 'splash_screen';
 const String verifyCodeScreenRoute = 'verify_code';

@@ -125,7 +125,7 @@ class _SignUpCashierFormState extends State<SignUpCashierForm> {
 
         if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Cashier account created.')),
+          const SnackBar(content: Text('Receptionist account created.')),
         );
         Navigator.pushNamedAndRemoveUntil(
           context,
@@ -311,7 +311,7 @@ class _SignUpCashierFormState extends State<SignUpCashierForm> {
                     )
                   : Text(_branches.isEmpty
                       ? 'Loading branches…'
-                      : 'Create Cashier Account'),
+                      : 'Create Receptionist Account'),
             ),
           ),
         ],

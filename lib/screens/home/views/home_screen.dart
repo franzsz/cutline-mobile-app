@@ -3,6 +3,8 @@ import 'package:flutter/material.dart';
 import 'components/offer_carousel_and_categories.dart';
 import 'components/popular_products.dart';
 import '../../discover/views/discover_screen.dart';
+import '../../../components/queue_instruction_card.dart';
+import '../../../services/user_preferences_service.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -14,6 +16,13 @@ class HomeScreen extends StatefulWidget {
 class _HomeScreenState extends State<HomeScreen> {
   final TextEditingController _searchController = TextEditingController();
   String _searchQuery = '';
+  bool _showQueueInstruction = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _checkIfShouldShowInstruction();
+  }
 
   @override
   void dispose() {
@@ -21,9 +30,30 @@ class _HomeScreenState extends State<HomeScreen> {
     super.dispose();
   }
 
+  Future<void> _checkIfShouldShowInstruction() async {
+    final isFirstTime = await UserPreferencesService.isFirstTimeUser();
+    final hasSeenInstruction =
+        await UserPreferencesService.hasSeenQueueInstruction();
+
+    if (mounted) {
+      setState(() {
+        _showQueueInstruction = isFirstTime && !hasSeenInstruction;
+      });
+    }
+  }
+
   Future<void> _onRefresh() async {
     await Future<void>.delayed(const Duration(milliseconds: 400));
-    if (mounted) setState(() {});
+    if (mounted) {
+      setState(() {});
+      _checkIfShouldShowInstruction();
+    }
+  }
+
+  void _dismissQueueInstruction() {
+    setState(() {
+      _showQueueInstruction = false;
+    });
   }
 
   void _showDiscoverModal(BuildContext context) {
@@ -61,6 +91,13 @@ class _HomeScreenState extends State<HomeScreen> {
             slivers: [
               SliverToBoxAdapter(child: _buildHero(context)),
               SliverToBoxAdapter(child: _buildSearch()),
+              if (_showQueueInstruction)
+                SliverToBoxAdapter(
+                  child: QueueInstructionCard(
+                    onDismiss: _dismissQueueInstruction,
+                    onJoinQueue: () => _showDiscoverModal(context),
+                  ),
+                ),
               const SliverToBoxAdapter(child: OffersCarouselAndCategories()),
               SliverToBoxAdapter(
                   child: PopularProducts(searchQuery: _searchQuery)),

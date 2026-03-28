@@ -6,6 +6,7 @@ class BranchModel {
   final String location;
   final String address;
   final String status; // "Open", "Closed", "Busy"
+  final bool isActive; // True if branch is active/available for queue
   final String image;
   final String phone;
   final String email;
@@ -23,6 +24,7 @@ class BranchModel {
     required this.location,
     required this.address,
     required this.status,
+    required this.isActive,
     required this.image,
     required this.phone,
     required this.email,
@@ -36,12 +38,21 @@ class BranchModel {
   });
 
   factory BranchModel.fromMap(Map<String, dynamic> map) {
+    // Determine isActive status - prioritize isActive field, fallback to status
+    final bool isActive =
+        map['isActive'] ?? (map['status'] != null && map['status'] != 'Closed');
+
+    // Determine status - prioritize status field, derive from isActive if needed
+    final String status =
+        map['status'] ?? (map['isActive'] == true ? 'Open' : 'Closed');
+
     return BranchModel(
       id: map['id'] ?? '',
       name: map['name'] ?? '',
       location: map['location'] ?? '',
       address: map['address'] ?? '',
-      status: map['status'] ?? 'Closed',
+      status: status,
+      isActive: isActive,
       image: map['image'] ?? '',
       phone: map['phone'] ?? '',
       email: map['email'] ?? '',
@@ -58,14 +69,22 @@ class BranchModel {
   /// New: create from Firestore DocumentSnapshot safely
   factory BranchModel.fromDoc(DocumentSnapshot doc) {
     final data = (doc.data() as Map<String, dynamic>? ?? {});
+
+    // Determine isActive status - prioritize isActive field, fallback to status
+    final bool isActive = data['isActive'] ??
+        (data['status'] != null && data['status'] != 'Closed');
+
+    // Determine status - prioritize status field, derive from isActive if needed
+    final String status =
+        data['status'] ?? (data['isActive'] == true ? 'Open' : 'Closed');
+
     return BranchModel(
       id: doc.id, // use Firestore doc id
       name: (data['name'] ?? '') as String,
       location: (data['location'] ?? '') as String,
       address: (data['address'] ?? '') as String,
-      status: ((data['status'] ??
-              ((data['isActive'] == true) ? 'Open' : 'Closed')) as String)
-          .toString(),
+      status: status,
+      isActive: isActive,
       image: (data['image'] ?? '') as String,
       phone: (data['phone'] ?? '') as String,
       email: (data['email'] ?? '') as String,
@@ -89,6 +108,7 @@ class BranchModel {
       'location': location,
       'address': address,
       'status': status,
+      'isActive': isActive,
       'image': image,
       'phone': phone,
       'email': email,
@@ -130,6 +150,7 @@ List<BranchModel> demoBranches = [
     location: 'Caloocan City',
     address: '9th Avenue, Caloocan City, Metro Manila',
     status: 'Open',
+    isActive: true,
     image: 'assets/images/supremo barber1.jpg',
     phone: '+63 912 345 6789',
     email: 'caloocan@supremobarber.com',
@@ -161,6 +182,7 @@ List<BranchModel> demoBranches = [
     location: 'Quezon City',
     address: 'Shorthorn Street, Quezon City, Metro Manila',
     status: 'Busy',
+    isActive: true,
     image: 'assets/images/supremo barber1.jpg',
     phone: '+63 923 456 7890',
     email: 'shorthorn@supremobarber.com',
@@ -192,6 +214,7 @@ List<BranchModel> demoBranches = [
     location: 'Manila',
     address: 'Abad Santos Avenue, Manila, Metro Manila',
     status: 'Open',
+    isActive: true,
     image: 'assets/images/supremo barber1.jpg',
     phone: '+63 934 567 8901',
     email: 'abadsantos@supremobarber.com',
@@ -224,6 +247,7 @@ List<BranchModel> demoBranches = [
     location: 'Manila',
     address: 'Sta. Mesa, Manila, Metro Manila',
     status: 'Closed',
+    isActive: false,
     image: 'assets/images/supremo barber1.jpg',
     phone: '+63 945 678 9012',
     email: 'stamesa@supremobarber.com',
